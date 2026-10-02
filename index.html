@@ -1,0 +1,1592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Heating oil tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#EEF1F0; --panel:#FFFFFF; --ink:#1E2A32; --muted:#5F6E78; --line:#D3DADC;
+  --oil:#C47A12; --oil-soft:#F3DFC0; --steel:#4F6B7D; --steel-soft:#DCE5EA;
+  --alert:#A8322A; --alert-soft:#F4DCD9; --ok:#2F6B4F;
+  --r-lg:14px; --r-sm:6px;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Barlow",system-ui,sans-serif;font-variant-numeric:tabular-nums}
+h1,h2,h3{font-family:"Barlow Condensed","Barlow",sans-serif;font-weight:600;line-height:1.15;margin:0}
+h1{font-size:1.6rem}
+h2{font-size:1.35rem;margin-bottom:.75rem}
+h3{font-size:1.1rem;margin-bottom:.5rem}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--oil);outline-offset:2px}
+.wrap{max-width:1180px;margin:0 auto;padding:1rem}
+header.top{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;justify-content:space-between;padding:.5rem 0 1rem}
+.actions{display:flex;flex-wrap:wrap;gap:.5rem}
+.btn{border:1px solid var(--steel);background:var(--panel);border-radius:var(--r-sm);padding:.45rem .9rem;cursor:pointer}
+.btn:hover{background:var(--steel-soft)}
+.btn.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+.btn.primary:hover{background:#34444f}
+.btn.small{padding:.15rem .5rem;font-size:.85rem}
+.btn.danger{border-color:var(--alert);color:var(--alert)}
+.backupbar{margin:-.4rem 0 1rem;font-size:.95rem;color:var(--muted)}
+.backupbar.due{color:#5c3a08;background:var(--oil-soft);border-left:4px solid var(--oil);padding:.55rem .85rem;border-radius:var(--r-sm)}
+.banner{background:var(--alert-soft);border-left:4px solid var(--alert);padding:.6rem .9rem;border-radius:var(--r-sm);margin-bottom:1rem}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);padding:1.1rem}
+section{margin-bottom:1.25rem}
+
+/* hero */
+.hero{display:grid;grid-template-columns:170px 1fr;gap:1.5rem;align-items:center}
+.hero-read{display:grid;gap:1rem}
+.big{font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:3.4rem;line-height:1}
+.big small{font-size:1.3rem;font-weight:500;margin-left:.25rem;color:var(--muted)}
+.sub{color:var(--muted)}
+.forecast{border-top:1px solid var(--line);padding-top:.9rem}
+.forecast .when{font-family:"Barlow Condensed",sans-serif;font-size:2rem;font-weight:600;line-height:1.1}
+.forecast.urgent .when{color:var(--alert)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.75rem 1.25rem;border-top:1px solid var(--line);padding-top:.9rem}
+.stat b{display:block;font-size:1.25rem;font-weight:600}
+.stat span{color:var(--muted);font-size:.9rem}
+
+/* grid */
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1.25rem}
+.grid2>*,.panel{min-width:0}
+.chart-box{position:relative;height:280px}
+.chart-box.tall{height:330px}
+.note{color:var(--muted);font-size:.88rem;margin:.5rem 0 0}
+
+/* forms */
+.entry{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.6rem;align-items:end}
+label{display:grid;gap:.2rem;font-size:.9rem;color:var(--muted)}
+input{border:1px solid var(--line);border-radius:var(--r-sm);padding:.45rem .55rem;background:#fff;min-width:0;width:100%}
+input:focus{border-color:var(--steel)}
+.form-actions{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
+.status{grid-column:1/-1;margin:0;font-size:.92rem;min-height:1.4em}
+.status.ok{color:var(--ok)}
+.status.err{color:var(--alert)}
+.editing{outline:2px dashed var(--oil);outline-offset:6px;border-radius:var(--r-sm)}
+
+/* tables */
+.table-wrap{overflow:auto;max-height:420px;border:1px solid var(--line);border-radius:var(--r-sm)}
+table{border-collapse:collapse;width:100%;font-size:.92rem}
+th,td{padding:.4rem .6rem;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line)}
+th{position:sticky;top:0;background:var(--steel-soft);font-weight:600}
+td:first-child,th:first-child{text-align:left}
+tr.refill-row td{background:#FBF3E6}
+td.flag{color:var(--alert)}
+td.est{color:var(--muted);font-style:italic}
+.tag{display:inline-block;font-size:.78rem;padding:0 .4rem;border-radius:4px;background:var(--oil-soft);color:#6b430a;margin-left:.3rem}
+ul.checks{margin:0;padding-left:1.1rem}
+ul.checks li{margin:.3rem 0}
+ul.checks li.warn::marker{color:var(--alert)}
+details summary{cursor:pointer;font-weight:600}
+
+.tabs{display:flex;gap:.15rem;border-bottom:1px solid var(--line);margin-bottom:.75rem;overflow-x:auto;scrollbar-width:thin}
+.tab{border:none;background:none;padding:.5rem .8rem;border-bottom:3px solid transparent;cursor:pointer;color:var(--muted);font-weight:500;white-space:nowrap}
+.tab:hover{color:var(--ink)}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--oil)}
+label.check{display:flex;flex-direction:row;align-items:center;gap:.4rem;color:var(--ink);font-size:.95rem;cursor:pointer}
+label.check input{width:auto;margin:0}
+.tab-tools{display:flex;flex-wrap:wrap;gap:.5rem 1rem;align-items:center;margin-bottom:.5rem;min-height:2.2rem}
+select{border:1px solid var(--line);border-radius:var(--r-sm);padding:.4rem .5rem;background:#fff;font:inherit;max-width:100%}
+.placeholder{display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);text-align:center;padding:1rem;border:1px dashed var(--line);border-radius:var(--r-sm)}
+.wx-row{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin-top:.6rem}
+.wx-row .note{margin:0}
+.note.err{color:var(--alert)}
+.loc-row{display:flex;gap:.5rem}
+.fit-result{margin-top:.6rem;padding:.6rem .8rem;background:var(--steel-soft);border-radius:var(--r-sm);font-size:.92rem}
+.fit-result p{margin:.25rem 0}
+.loc-results{display:flex;flex-direction:column;gap:.3rem;margin:.5rem 0}
+.loc-results .btn{text-align:left}
+dialog h3{margin-top:1.1rem}
+dialog{max-height:90vh;overflow:auto;border:none;border-radius:var(--r-lg);padding:1.25rem;max-width:520px;width:calc(100% - 2rem)}
+dialog::backdrop{background:rgba(30,42,50,.45)}
+.settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin:1rem 0}
+
+@media (max-width:760px){
+  .grid2{grid-template-columns:minmax(0,1fr)}
+  .hero{grid-template-columns:96px 1fr;gap:.9rem 1rem}
+  .hero-read{display:contents}
+  .hero-read>div:first-child{grid-column:2;align-self:center}
+  .forecast,.stats{grid-column:1/-1}
+  .big{font-size:2.6rem}
+  .forecast .when{font-size:1.6rem}
+  .chart-box,.chart-box.tall{height:250px}
+  .settings-grid{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Heating oil tracker</h1>
+    <div class="actions">
+      <button class="btn" id="btnExport" type="button">Export data</button>
+      <button class="btn" id="btnImport" type="button">Import data</button>
+      <button class="btn" id="btnSettings" type="button">Settings</button>
+      <input type="file" id="importFile" accept="application/json,.json" hidden>
+    </div>
+  </header>
+  <p class="backupbar" id="backupBar" role="status" aria-live="polite"></p>
+
+  <div id="storageBanner" class="banner" hidden>This browser view can't save data, so changes will be lost when you close it. Export your data before closing, or open the file directly in your browser.</div>
+  <div id="loadBanner" class="banner" hidden><span id="loadText"></span> <button class="btn small" type="button" id="loadDownload">Download the unreadable data</button></div>
+  <div id="chartBanner" class="banner" hidden>Charts need an internet connection the first time the page loads. Numbers and tables still work.</div>
+
+  <!-- HERO -->
+  <section class="panel hero" aria-label="Tank status">
+    <svg id="tankSvg" viewBox="0 0 170 270" role="img" aria-label="Estimated tank level"></svg>
+    <div class="hero-read">
+      <div>
+        <div class="big" id="heroLitres">–</div>
+        <div class="sub" id="heroSub">–</div>
+      </div>
+      <div class="forecast" id="forecastBox">
+        <div class="sub">Reorder level reached</div>
+        <div class="when" id="reorderWhen">–</div>
+        <div class="sub" id="reorderSub">–</div>
+      </div>
+      <div class="stats" id="stats"></div>
+    </div>
+  </section>
+
+  <!-- ENTRY -->
+  <section class="grid2">
+    <div class="panel" id="readingPanel">
+      <h2 id="readingTitle">Add a gauge reading</h2>
+      <div class="entry" id="readingForm">
+        <label>Date<input type="date" name="date"></label>
+        <label>Outside gauge (cm)<input type="text" name="cm" inputmode="decimal" placeholder="e.g. 37,5"></label>
+        <label>Note<input type="text" name="note" maxlength="140"></label>
+        <div class="form-actions">
+          <button class="btn primary" type="button" id="readingSubmit">Add reading</button>
+          <button class="btn" type="button" id="readingCancel" hidden>Cancel</button>
+        </div>
+        <p class="status" id="readingMsg" role="status" aria-live="polite"></p>
+      </div>
+    </div>
+    <div class="panel" id="refillPanel">
+      <h2 id="refillTitle">Add a refill</h2>
+      <div class="entry" id="refillForm">
+        <label>Date<input type="date" name="date"></label>
+        <label>Litres<input type="text" name="litres" inputmode="decimal"></label>
+        <label>Price €/L<input type="text" name="price" inputmode="decimal" placeholder="e.g. 1,09"></label>
+        <label>Total €<input type="text" name="total" id="totalInput" inputmode="decimal" placeholder="auto"></label>
+        <label id="afterCmLabel">Gauge after fill (cm)<input type="text" name="afterCm" inputmode="decimal"></label>
+        <label>Note<input type="text" name="note" maxlength="140"></label>
+        <div class="form-actions">
+          <button class="btn primary" type="button" id="refillSubmit">Add refill</button>
+          <button class="btn" type="button" id="refillCancel" hidden>Cancel</button>
+        </div>
+        <p class="status" id="refillMsg" role="status" aria-live="polite"></p>
+      </div>
+      <p class="note">Leave total empty to use litres × price. Entering the gauge reading after the fill also saves it as a reading.</p>
+    </div>
+  </section>
+
+  <!-- CHARTS -->
+  <section class="panel">
+    <h2>Tank level and forecast</h2>
+    <div class="chart-box tall"><canvas id="chLevel"></canvas></div>
+    <p class="note" id="levelNote"></p>
+  </section>
+
+  <section class="grid2">
+    <div class="panel">
+      <h2>Litres per season</h2>
+      <div class="chart-box"><canvas id="chSeasonL"></canvas></div>
+      <p class="note" id="seasonLNote"></p>
+    </div>
+    <div class="panel">
+      <h2>Cost per season</h2>
+      <div class="chart-box"><canvas id="chSeasonC"></canvas></div>
+      <p class="note">Spent: refills paid in that season. Consumption cost: litres used × price paid that season, plus projected litres × forecast price.</p>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Consumption and temperature</h2>
+    <div class="tabs" role="tablist" aria-label="Consumption views">
+      <button class="tab" role="tab" type="button" data-tab="cum">Cumulative</button>
+      <button class="tab" role="tab" type="button" data-tab="rate">Daily rate</button>
+      <button class="tab" role="tab" type="button" data-tab="month">By month</button>
+      <button class="tab" role="tab" type="button" data-tab="season">Season average</button>
+      <button class="tab" role="tab" type="button" data-tab="hdd">Per degree day</button>
+      <button class="tab" role="tab" type="button" data-tab="scatter">Use vs temperature</button>
+    </div>
+    <div class="tab-tools" id="tabTools">
+      <label id="seasonPickLabel">Season <select id="seasonPick"></select></label>
+      <label class="check" id="smoothLabel"><input type="checkbox" id="smoothToggle"> Smoothed (14-day average)</label>
+    </div>
+    <div class="chart-box tall" id="tabBox"><canvas id="chTab"></canvas><div class="placeholder" id="tabEmpty" hidden></div></div>
+    <p class="note" id="tabNote"></p>
+    <div class="wx-row"><p class="note" id="wxNote"></p><button class="btn small" type="button" id="wxRefresh" hidden>Update temperatures</button></div>
+  </section>
+
+  <section class="panel">
+    <h2>Price history and trend</h2>
+    <div class="chart-box"><canvas id="chPrice"></canvas></div>
+    <p class="note" id="priceNote"></p>
+  </section>
+
+  <!-- SEASON TABLE -->
+  <section class="panel">
+    <h2>Season summary</h2>
+    <div class="table-wrap"><table id="seasonTable"></table></div>
+  </section>
+
+  <!-- DATA -->
+  <section class="grid2">
+    <div class="panel">
+      <h2>Readings</h2>
+      <div class="table-wrap"><table id="readingTable"></table></div>
+    </div>
+    <div class="panel">
+      <h2>Refills</h2>
+      <div class="table-wrap"><table id="refillTable"></table></div>
+      <p class="note">Measured: gauge rise plus estimated use during the refill gap. A large difference means the delivery, the gauge reading or the date needs a look.</p>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Data checks</h2>
+    <ul class="checks" id="checks"></ul>
+  </section>
+</div>
+
+<dialog id="settingsDlg">
+  <h2>Settings</h2>
+  <div class="settings-grid">
+    <label>Litres per cm<input type="text" inputmode="decimal" id="setF"></label>
+    <label>Gauge reads high by (cm)<input type="text" inputmode="decimal" id="setOff"></label>
+    <label>Full tank on gauge (cm)<input type="text" inputmode="decimal" id="setFull"></label>
+    <label>Reorder at gauge (cm)<input type="text" inputmode="decimal" id="setReorder"></label>
+  </div>
+  <p class="note" id="setInfo"></p>
+  <h3>Location for temperatures</h3>
+  <p class="note" id="locCurrent" style="margin-top:0"></p>
+  <div class="loc-row">
+    <input type="text" id="locQuery" placeholder="Town or village" autocomplete="off">
+    <button class="btn" type="button" id="locFind">Find</button>
+  </div>
+  <div class="loc-results" id="locResults"></div>
+  <p class="note">Temperatures come from Open-Meteo (open-meteo.com). Only the coordinates are sent.</p>
+  <h3>Degree days and forecast</h3>
+  <div class="settings-grid">
+    <label>Degree-day base (°C)<input type="text" inputmode="decimal" id="setHddBase"></label>
+    <label>Heating threshold (°C)<input type="text" inputmode="decimal" id="setHddThr"></label>
+    <label style="grid-column:1/-1">Forecast method
+      <select id="setMethod">
+        <option value="auto">Temperature model when it fits your data well, otherwise monthly averages</option>
+        <option value="profile">Monthly averages only</option>
+      </select></label>
+  </div>
+  <p class="note">Both are outdoor daily average temperatures, not thermostat settings. A day at or below the threshold counts (base − temperature) degree days, otherwise 0. The defaults 18 °C and 15 °C follow the Eurostat method and suit a thermostat around 20 °C.</p>
+  <div class="form-actions"><button class="btn" type="button" id="fitBtn">Fit to my readings</button></div>
+  <div id="fitResult" class="fit-result" hidden></div>
+  <h3>Data format</h3>
+  <p class="note" style="margin-top:0">For creating or editing data files by hand. The schema describes every field and its limits; the example is a small valid file you can open, copy or import. Importing it replaces your current data, so export first.</p>
+  <div class="form-actions">
+    <button class="btn" type="button" id="dlSchema">Download schema</button>
+    <button class="btn" type="button" id="dlExample">Download example file</button>
+  </div>
+  <p class="status err" id="setMsg" role="status" aria-live="polite"></p>
+  <div class="form-actions" style="margin-top:1rem">
+    <button class="btn primary" type="button" id="setSave">Save settings</button>
+    <button class="btn" type="button" id="setClose">Close</button>
+    <button class="btn danger" type="button" id="setReset">Restore spreadsheet data</button>
+  </div>
+</dialog>
+
+<dialog id="askDlg">
+  <p id="askText" style="margin-top:0;white-space:pre-line;max-height:60vh;overflow:auto"></p>
+  <div class="form-actions">
+    <button class="btn primary" type="button" id="askYes">Confirm</button>
+    <button class="btn" type="button" id="askNo">Cancel</button>
+  </div>
+</dialog>
+
+<script>
+/*CALC-START*/
+const DAY = 86400000;
+const RISE_TOL_CM = 2; // rises above this between readings are treated as refills
+function dn(s){ const [y,m,d] = s.split('-').map(Number); return Date.UTC(y, m-1, d) / DAY; }
+function ds(n){ return new Date(n*DAY).toISOString().slice(0,10); }
+function monthOf(n){ return new Date(n*DAY).getUTCMonth(); }
+function seasonOf(n){ const d = new Date(n*DAY); const y = d.getUTCFullYear(); return d.getUTCMonth() >= 6 ? y : y-1; }
+function seasonStart(s){ return Date.UTC(s, 6, 1) / DAY; }
+function seasonLabel(s){ return s + '-' + String((s+1) % 100).padStart(2,'0'); }
+function fmtD(n){ const d = new Date(n*DAY); return String(d.getUTCDate()).padStart(2,'0') + '/' + String(d.getUTCMonth()+1).padStart(2,'0') + '/' + d.getUTCFullYear(); }
+
+// weighted least squares: L/day = base + perHdd × HDD/day, weight = days in the gap; base kept >= 0
+function fitModel(pts){
+  if (pts.length < 5) return null;
+  let W = 0, sx = 0, sy = 0;
+  pts.forEach(p => { W += p.days; sx += p.days * p.x; sy += p.days * p.y; });
+  const xm = sx / W, ym = sy / W;
+  let sxx = 0, sxy = 0;
+  pts.forEach(p => { sxx += p.days * (p.x - xm) ** 2; sxy += p.days * (p.x - xm) * (p.y - ym); });
+  let k = sxx ? sxy / sxx : 0, a0 = ym - k * xm;
+  if (a0 < 0){ let n0 = 0, d0 = 0; pts.forEach(p => { n0 += p.days * p.x * p.y; d0 += p.days * p.x ** 2; }); a0 = 0; k = d0 ? n0 / d0 : 0; }
+  let sse = 0, sst = 0;
+  pts.forEach(p => { sse += p.days * (p.y - (a0 + k * p.x)) ** 2; sst += p.days * (p.y - ym) ** 2; });
+  return {base: a0, perHdd: k, r2: sst ? 1 - sse / sst : null, n: pts.length};
+}
+// try degree-day base 15..24 °C and threshold 12 °C..base in 0.5 °C steps on the measured gaps
+function fitDegreeDays(gaps){
+  const results = [];
+  for (let b = 15; b <= 24.001; b += 0.5) for (let t = 12; t <= b + 0.001; t += 0.5){
+    const pts = gaps.map(g => { let h = 0; for (const T of g.temps) if (T <= t) h += b - T; return {days: g.days, y: g.lpd, x: h / g.temps.length}; });
+    const m = fitModel(pts);
+    if (m && m.perHdd > 0 && m.r2 != null) results.push({...m, fitBase: m.base, base: b, thr: t});
+  }
+  results.sort((p, q) => q.r2 - p.r2);
+  const best = results[0] || null;
+  // 'almost as good': unexplained variation within 10% of the best combination's
+  const near = best ? results.filter(x => (1 - x.r2) <= (1 - best.r2) * 1.10 + 1e-9) : [];
+  const span = arr => Math.max(...arr) - Math.min(...arr);
+  return {best, near, tried: results.length,
+    baseRange: near.length ? [Math.min(...near.map(x => x.base)), Math.max(...near.map(x => x.base))] : null,
+    thrRange: near.length ? [Math.min(...near.map(x => x.thr)), Math.max(...near.map(x => x.thr))] : null,
+    ambiguous: near.length > 1 && (span(near.map(x => x.base)) > 1.5 || span(near.map(x => x.thr)) > 1.5)};
+}
+
+function doyOf(n){ const d = new Date(n*DAY); return Math.min(364, n - Date.UTC(d.getUTCFullYear(), 0, 1) / DAY); }
+
+// wx: {temps: Map(dayNumber -> daily mean °C), climo: array[365] of typical °C} or null
+function compute(st, todayStr, wx){
+  const S = st.settings, f = S.cmToL, off = S.gaugeOffsetCm;
+  const realL = cm => Math.max(0, (cm - off) * f);
+  const today = dn(todayStr);
+  const checks = [];
+  const R = st.readings.map((r,i) => ({...r, n: dn(r.date), i})).sort((a,b) => a.n-b.n || a.i-b.i);
+  const F = st.refills.map((r,i) => ({...r, n: dn(r.date), i})).sort((a,b) => a.n-b.n || a.i-b.i);
+
+  R.forEach(r => {
+    r.L = realL(r.cm);
+    if (r.cm < off) checks.push({warn:true, text:`Reading ${fmtD(r.n)} is ${r.cm} cm, below the ${off} cm gauge offset. Real level counted as 0 L.`});
+    if (r.note) checks.push({warn:false, text:`Reading ${fmtD(r.n)}: ${r.note}`});
+    if (r.n > today) checks.push({warn:true, text:`Reading ${fmtD(r.n)} is dated in the future. Check the date.`});
+  });
+  for (let k = 1; k < R.length; k++) if (R[k].n === R[k-1].n)
+    checks.push({warn:false, text:`Two readings on ${fmtD(R[k].n)} (${R[k-1].cm} and ${R[k].cm} cm). They are used in the order entered.`});
+
+  F.forEach(r => {
+    const auto = (r.litres != null && r.pricePerL != null) ? r.litres * r.pricePerL : null;
+    r.total = r.totalEur != null ? r.totalEur : auto;
+    r.totalManual = r.totalEur != null;
+    if (r.totalManual && auto != null && Math.abs(r.totalEur - auto) > 0.5)
+      checks.push({warn:false, text:`Refill ${fmtD(r.n)}: total €${r.totalEur.toFixed(2)} differs from litres × price (€${auto.toFixed(2)}) by €${(r.totalEur-auto).toFixed(2)}.`});
+    if (r.litres == null) checks.push({warn:true, text:`Refill ${fmtD(r.n)} has no litres. It counts for the price trend only.`});
+    if (r.note) checks.push({warn:false, text:`Refill ${fmtD(r.n)}: ${r.note}`});
+    if (r.n > today) checks.push({warn:true, text:`Refill ${fmtD(r.n)} is dated in the future. Check the date.`});
+  });
+
+  // intervals between consecutive readings
+  const iv = [];
+  for (let k = 0; k < R.length-1; k++){
+    const a = R[k], b = R[k+1];
+    iv.push({a, b, days: b.n - a.n, refill: (b.cm - a.cm) > RISE_TOL_CM, refills: []});
+  }
+  iv.forEach(x => { if (!x.refill){ x.cons = Math.max(0, x.a.L - x.b.L); x.lpd = x.days > 0 ? x.cons / x.days : null; } });
+
+  // assign refills to the rising interval whose date span contains them
+  const lastN = R.length ? R[R.length-1].n : -Infinity;
+  F.forEach(r => {
+    const c = iv.find(x => x.refill && x.a.n <= r.n && r.n <= x.b.n);
+    if (c){ c.refills.push(r); r.iv = c; }
+    else if (r.n >= lastN){ r.pending = true; }
+    else { r.unmatched = true; if (r.litres != null) checks.push({warn:true, text:`Refill ${fmtD(r.n)} (${r.litres ?? '?'} L) has no matching rise in the gauge readings around that date.`}); }
+  });
+
+  const cs = R.length ? R[0].n : today, ce = R.length ? lastN : today;
+
+  // monthly profile (L/day) from gaps without a refill
+  const mSum = Array(12).fill(0), mCnt = Array(12).fill(0);
+  let tot = 0, cnt = 0;
+  iv.forEach(x => {
+    if (x.refill || x.days <= 0) return;
+    const per = x.cons / x.days;
+    for (let d = x.a.n; d < x.b.n; d++){ const m = monthOf(d); mSum[m] += per; mCnt[m]++; tot += per; cnt++; }
+  });
+  const overall = cnt ? tot/cnt : 0;
+  const profile = mSum.map((s,m) => mCnt[m] ? s / mCnt[m] : overall);
+  const prof = d => profile[monthOf(d)];
+  const SHORT_GAP = 10; // days; longer refill gaps use the monthly profile and skip the delivery check
+
+  iv.forEach((x,k) => {
+    if (!x.refill) return;
+    if (x.days > SHORT_GAP){
+      x.cons = 0; for (let d = x.a.n; d < x.b.n; d++) x.cons += prof(d);
+      x.lpd = x.cons / x.days;
+    } else {
+      let p = null, q = null;
+      for (let j = k-1; j >= 0; j--) if (!iv[j].refill && iv[j].lpd != null){ p = iv[j].lpd; break; }
+      for (let j = k+1; j < iv.length; j++) if (!iv[j].refill && iv[j].lpd != null){ q = iv[j].lpd; break; }
+      const v = [p,q].filter(z => z != null);
+      x.lpd = v.length ? v.reduce((s,z) => s+z, 0) / v.length : 0;
+      x.cons = x.lpd * x.days;
+    }
+    x.estimated = true;
+    const known = x.refills.filter(r => r.litres != null);
+    x.delivered = known.reduce((s,r) => s + r.litres, 0);
+    x.measured = x.b.L - x.a.L + x.cons;
+    x.refills.forEach(r => { r.group = x.refills.length; r.gapDays = x.days; });
+    if (known.length && x.days <= SHORT_GAP){
+      x.diff = x.measured - x.delivered;
+      x.refills.forEach(r => { r.measured = x.measured; r.diff = x.diff; });
+      if (Math.abs(x.diff) > Math.max(30, 0.05 * x.delivered))
+        checks.push({warn:true, text:`Refill ${fmtD(x.refills[0].n)}: ${Math.round(x.delivered)} L ordered, about ${Math.round(x.measured)} L measured on the gauge (${x.diff > 0 ? '+' : ''}${Math.round(x.diff)} L).`});
+    } else if (known.length){
+      x.refills.forEach(r => { r.longGap = true; });
+    }
+    if (!x.refills.length)
+      checks.push({warn:true, text:`Gauge rose ${(x.b.cm - x.a.cm).toFixed(1)} cm between ${fmtD(x.a.n)} and ${fmtD(x.b.n)}, but no refill is recorded.`});
+  });
+
+  // daily consumption expansion
+  const daily = new Map();
+  const add = (d,v) => daily.set(d, (daily.get(d) || 0) + v);
+  iv.forEach(x => {
+    if (x.days > 0){ const per = x.cons / x.days; for (let d = x.a.n; d < x.b.n; d++) add(d, per); }
+    else if (x.cons > 0) add(x.a.n, x.cons);
+  });
+
+  // price trend (OLS on refills with price)
+  const P = F.filter(r => r.pricePerL != null).map(r => ({x: r.n, y: r.pricePerL}));
+  const price = {n: P.length, slopePerYear: 0, sd: 0, r2: null};
+  if (P.length >= 2){
+    const xm = P.reduce((s,p) => s+p.x, 0) / P.length, ym = P.reduce((s,p) => s+p.y, 0) / P.length;
+    let sxx = 0, sxy = 0, syy = 0;
+    P.forEach(p => { sxx += (p.x-xm)**2; sxy += (p.x-xm)*(p.y-ym); syy += (p.y-ym)**2; });
+    const b = sxx ? sxy/sxx : 0;
+    const sse = P.reduce((s,p) => s + (p.y - (ym + b*(p.x-xm)))**2, 0);
+    price.predict = d => ym + b*(d - xm);
+    price.slopePerYear = b * 365.25;
+    price.sd = P.length > 2 ? Math.sqrt(sse / (P.length-2)) : 0;
+    price.r2 = syy ? 1 - sse/syy : null;
+  } else if (P.length === 1){ price.predict = () => P[0].y; }
+  else { price.predict = () => null; }
+  price.points = P;
+
+  // ---- temperature, degree days and the temperature model ----
+  const temps = wx && wx.temps && wx.temps.size ? wx.temps : null;
+  const climo = wx && wx.climo ? wx.climo : null;
+  const hddBase = S.hddBase ?? 18, hddThr = S.hddThreshold ?? 15;
+  const hddOf = t => t <= hddThr ? hddBase - t : 0;           // Eurostat-style: counts only days at or below the threshold
+  const tempAt = d => temps && temps.has(d) ? temps.get(d) : (climo ? climo[doyOf(d)] : null);
+  iv.forEach(x => {
+    if (!temps || x.days <= 0) return;
+    let sT = 0, sH = 0, k = 0;
+    for (let d = x.a.n; d < x.b.n; d++){ if (!temps.has(d)){ k = -1; break; } const t = temps.get(d); sT += t; sH += hddOf(t); k++; }
+    if (k > 0){ x.tMean = sT / k; x.hddSum = sH; x.hddPerDay = sH / k; x.temps = []; for (let d = x.a.n; d < x.b.n; d++) x.temps.push(temps.get(d)); }
+  });
+  // weighted least squares on measured gaps: L/day = base + perHdd × HDD/day, weights = days
+  const fitGaps = temps ? iv.filter(x => !x.refill && x.days > 0 && x.lpd != null && x.hddPerDay != null) : [];
+  const model = temps ? fitModel(fitGaps.map(x => ({days: x.days, y: x.lpd, x: x.hddPerDay}))) : null;
+  const MODEL_MIN_R2 = 0.5;
+  let useModel = false, forecastReason;
+  if (!temps) forecastReason = 'Set your location in Settings to use temperatures in the forecast.';
+  else if ((S.forecastMethod || 'auto') === 'profile') forecastReason = 'Monthly averages are selected in Settings.';
+  else if (!model) forecastReason = 'Not enough readings with temperature data to fit the temperature model yet.';
+  else if (!(model.perHdd > 0) || model.r2 == null || model.r2 < MODEL_MIN_R2) forecastReason = `The temperature model explains only ${Math.round(Math.max(0, model.r2 || 0) * 100)}% of your usage (at least ${MODEL_MIN_R2 * 100}% is needed), so monthly averages are used.`;
+  else useModel = true;
+  const use = d => { if (useModel){ const t = tempAt(d); if (t != null) return model.base + model.perHdd * hddOf(t); } return prof(d); };
+
+  // current level: last reading, minus expected use, plus refills logged after it
+  const cap = realL(S.fullGaugeCm), reorderL = realL(S.reorderGaugeCm);
+  const pending = F.filter(r => r.pending && r.litres != null);
+  const est = [], fc = [];
+  let lvl = R.length ? R[R.length-1].L : 0, ranOutEst = null;
+  const startN = R.length ? lastN : today;
+  if (R.length){
+    est.push({n: startN, L: lvl});
+    for (let d = startN; d <= Math.max(today, startN); d++){
+      pending.filter(r => r.n === d).forEach(r => { lvl = Math.min(cap, lvl + r.litres); est.push({n:d, L:lvl}); });
+      if (d < today){ lvl -= use(d); if (lvl <= 0 && ranOutEst == null) ranOutEst = d+1; lvl = Math.max(0, lvl); est.push({n:d+1, L:lvl}); }
+    }
+  }
+  const nowL = lvl, nowN = Math.max(today, startN);
+  let reorderN = null, emptyN = null;
+  if (R.length){
+    let l = nowL; fc.push({n: nowN, L: l});
+    if (l <= reorderL) reorderN = nowN;
+    for (let d = nowN; d < nowN + 730; d++){
+      pending.filter(r => r.n === d && d > nowN).forEach(r => { l = Math.min(cap, l + r.litres); });
+      l -= use(d);
+      fc.push({n: d+1, L: Math.max(0,l)});
+      if (reorderN == null && l <= reorderL) reorderN = d+1;
+      if (l <= 0){ emptyN = d+1; break; }
+    }
+  }
+
+  // seasons
+  const ORDER = [6,7,8,9,10,11,0,1,2,3,4,5];
+  const seasons = [];
+  if (R.length){
+    const s0 = seasonOf(cs), s1 = seasonOf(Math.max(today, ce));
+    for (let s = s0; s <= s1; s++){
+      const a = seasonStart(s), e = seasonStart(s+1);
+      let rec = 0, proj = 0;
+      for (let d = Math.max(a, cs); d < Math.min(e, ce); d++) rec += daily.get(d) || 0;
+      const pf = Math.max(a, ce);
+      for (let d = pf; d < e; d++) proj += use(d);
+      const inS = F.filter(r => seasonOf(r.n) === s);
+      const bought = inS.reduce((t,r) => t + (r.litres || 0), 0);
+      const spent = inS.reduce((t,r) => t + (r.total || 0), 0);
+      const wp = inS.filter(r => r.litres != null && r.pricePerL != null);
+      const wl = wp.reduce((t,r) => t + r.litres, 0);
+      const avgPrice = wl ? wp.reduce((t,r) => t + r.litres*r.pricePerL, 0) / wl : null;
+      const projPrice = proj > 0 ? price.predict(Math.round((pf + e) / 2)) : null;
+      const recPrice = avgPrice ?? price.predict(Math.round((a+e)/2));
+      const consCost = rec * (recPrice || 0) + proj * (projPrice || 0);
+
+      // heating period 1 Oct - 30 Apr: recorded days only for litres; temperatures for every past day
+      const hpA = Date.UTC(s, 9, 1) / DAY, hpE = Date.UTC(s+1, 4, 1) / DAY;
+      let hL = 0, hD = 0, hH = 0, hHc = 0, tS = 0, tC = 0, hddP = 0;
+      for (let d = hpA; d < hpE; d++){
+        if (d >= cs && d < ce){ hL += daily.get(d) || 0; hD++; if (temps && temps.has(d)){ hH += hddOf(temps.get(d)); hHc++; } }
+        if (temps && temps.has(d) && d < today){ const t = temps.get(d); tS += t; tC++; hddP += hddOf(t); }
+      }
+      const heating = {days: hD, totalDays: hpE - hpA, lpd: hD ? hL / hD : null, litres: hL,
+        temp: tC ? tS / tC : null, tempDays: tC, hddPeriod: tC ? hddP : null,
+        hddRecorded: hHc === hD && hD ? hH : null, lPerHdd: (hHc === hD && hH > 0) ? hL / hH : null};
+
+      // calendar months in season order (Jul..Jun)
+      const monthly = ORDER.map(m => {
+        const y = m >= 6 ? s : s+1, ma = Date.UTC(y, m, 1) / DAY, me = Date.UTC(y, m+1, 1) / DAY;
+        let L = 0, c = 0, t = 0, tc = 0;
+        for (let d = ma; d < me; d++){
+          if (d >= cs && d < ce){ L += daily.get(d) || 0; c++; }
+          if (temps && temps.has(d) && d < today){ t += temps.get(d); tc++; }
+        }
+        return {m, lpd: c >= 7 ? L / c : null, covered: c, temp: tc >= 15 ? t / tc : null};
+      });
+
+      seasons.push({s, label: seasonLabel(s), rec, proj, total: rec+proj, bought, spent, avgPrice, projPrice, consCost,
+        partialStart: cs > a, hasProj: proj > 0.5, refillCount: inS.length, heating, monthly});
+    }
+  }
+  const avgMonthTemp = ORDER.map((m, i) => { const v = seasons.map(x => x.monthly[i].temp).filter(t => t != null); return v.length ? v.reduce((a,b) => a+b, 0) / v.length : null; });
+  const avgMonthLpd = ORDER.map((m, i) => { const v = seasons.map(x => x.monthly[i]).filter(x => x.lpd != null);
+    const c = v.reduce((a,x) => a + x.covered, 0); return c ? v.reduce((a,x) => a + x.lpd * x.covered, 0) / c : null; });
+
+  // recent measured rate: last non-refill interval with days > 0
+  let recent = null;
+  for (let k = iv.length-1; k >= 0; k--) if (!iv[k].refill && iv[k].days > 0){ recent = iv[k]; break; }
+
+  return {R, F, iv, daily, profile, overall, price, cap, reorderL, nowL, nowN, est, fc, reorderN, emptyN, ranOutEst,
+    seasons, checks, recent, today, lastN, realL, cs, ce, pending,
+    temps, tempAt, hddOf, model, fitGaps, useModel, forecastReason, use, ORDER, avgMonthTemp, avgMonthLpd};
+}
+/*CALC-END*/
+
+/* ---------- seed data from Petrelaio.xlsx ---------- */
+const SEED = {
+  version: 1,
+  settings: {cmToL: 9.33, gaugeOffsetCm: 6, fullGaugeCm: 140, reorderGaugeCm: 30},
+  readings: [
+    ["2021-10-25",140],["2021-12-19",45],["2021-12-23",32],["2021-12-27",25],["2021-12-28",132],
+    ["2022-01-22",77],["2022-01-26",62],["2022-02-01",44.5],["2022-02-03",39],["2022-02-05",34],["2022-02-08",27],
+    ["2022-02-09",134.5],["2022-02-19",111.5],["2022-02-26",99],["2022-03-07",78],["2022-03-19",40],["2022-03-22",27],
+    ["2022-03-23",82],["2022-04-02",64.5],["2022-04-20",45.5],
+    ["2022-10-16",29.5],["2022-10-21",27.5],["2022-10-22",135],["2022-12-07",97.5],["2022-12-24",76.5],
+    ["2023-01-06",59.5],["2023-01-24",29],["2023-01-29",127],["2023-02-26",52.5],["2023-03-13",31],["2023-03-21",86],
+    ["2023-10-22",36,"Date corrected from 22/10/2022 in the spreadsheet (assumed typo, it gave a 376-day gap)."],
+    ["2023-11-02",34],["2023-11-04",128],["2023-12-07",102],["2024-01-07",52.5],["2024-01-11",42.5],["2024-01-16",27],
+    ["2024-01-18",133],["2024-02-14",72],["2024-03-02",38.5],["2024-03-09",27],["2024-03-13",22],["2024-03-14",99],
+    ["2024-11-11",41],["2024-11-18",34],["2024-11-23",127.5],["2024-12-21",82],["2025-01-09",32.5],["2025-01-13",27.5],
+    ["2025-01-15",22.5],["2025-01-16",125],["2025-02-16",47.5],
+    ["2025-03-01",0,"Recorded as 0 cm. Possibly the tank ran dry; please confirm."],
+    ["2025-03-02",31],["2025-03-06",23],["2025-03-07",98],
+    ["2025-10-16",35.5],["2025-10-18",131],["2025-12-06",100],["2025-12-31",55.5],["2026-01-07",42],["2026-01-13",26],
+    ["2026-01-14",112],["2026-02-20",38]
+  ],
+  refills: [
+    ["2021-10-25",null,1.05,null,"Price listed in the spreadsheet without litres."],
+    ["2021-12-27",1000,1.05],["2022-02-08",1000,1.146],["2022-03-22",500,1.39],
+    ["2022-10-22",1000,1.349],["2023-01-29",1000,1.25],["2023-03-21",700,1.13],
+    ["2023-11-04",900,1.30,null,"Date corrected from 04/11/2024 in the spreadsheet (assumed typo)."],
+    ["2024-01-18",1000,1.19],["2024-03-13",700,1.22],
+    ["2024-11-23",900,1.11,null,"No fill date in the spreadsheet; date taken from the reading row."],
+    ["2025-01-16",1000,1.18,null,"No fill date in the spreadsheet; date taken from the reading row."],
+    ["2025-03-02",240,1.216,null,"No fill date in the spreadsheet; date taken from the reading row."],
+    ["2025-03-07",690,1.211,null,"No fill date in the spreadsheet; date taken from the reading row."],
+    ["2025-10-18",1000,1.09,null,"No fill date in the spreadsheet; date taken from the reading row."],
+    ["2026-01-13",800,1.09,879,"No fill date in the spreadsheet; date taken from the reading row. Total €879 was typed in the sheet."]
+  ]
+};
+let seq = 0;
+const uid = () => Date.now().toString(36) + (seq++).toString(36) + Math.random().toString(36).slice(2,6);
+function seedState(){
+  return {
+    version: 1,
+    settings: {...DEFAULT_SETTINGS, ...SEED.settings},
+    readings: SEED.readings.map(([date,cm,note]) => ({id: uid(), date, cm, note: note || ''})),
+    refills: SEED.refills.map(([date,litres,pricePerL,totalEur,note]) => ({id: uid(), date, litres, pricePerL, totalEur: totalEur ?? null, note: note || ''}))
+  };
+}
+
+/* ---------- storage ---------- */
+const KEY = 'heatingOilTracker.v1';
+let canStore = false;
+try { localStorage.setItem(KEY+'.test','1'); localStorage.removeItem(KEY+'.test'); canStore = true; } catch(e){ canStore = false; }
+let state;
+let loadProblem = null; // set when saved data exists but can't be read
+function load(){
+  if (!canStore) return seedState();
+  const raw = localStorage.getItem(KEY);
+  if (!raw) return seedState();
+  let v;
+  try { v = validate(JSON.parse(raw)); } catch(e){ v = {ok: false, errors: ['The saved data is not valid JSON.']}; }
+  if (v.ok) return v.state;
+  // never discard unreadable data silently: keep a copy and tell the user
+  const backupKey = KEY + '.unreadable.' + new Date().toISOString().replace(/[:.]/g, '-');
+  try { localStorage.setItem(backupKey, raw); } catch(e){}
+  loadProblem = {raw, errors: v.errors};
+  return seedState();
+}
+function save(){ if (!canStore) return false; try { localStorage.setItem(KEY, JSON.stringify(state)); return true; } catch(e){ $('#storageBanner').hidden = false; $('#storageBanner').textContent = 'Saving failed: ' + e.message + '. Export your data to keep it.'; return false; } }
+
+/* ---------- strict import validation ---------- */
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const SCHEMA_VERSION = 1;
+const MAX_ERRORS = 12;
+const DEFAULT_SETTINGS = {cmToL: 9.33, gaugeOffsetCm: 6, fullGaugeCm: 140, reorderGaugeCm: 30,
+  hddBase: 18, hddThreshold: 15, forecastMethod: 'auto', location: null};
+const NUM_SETTINGS = ['cmToL', 'gaugeOffsetCm', 'fullGaugeCm', 'reorderGaugeCm', 'hddBase', 'hddThreshold'];
+const FORECAST_METHODS = ['auto', 'profile'];
+const shown = v => v === undefined ? 'nothing' : JSON.stringify(v);
+const isNum = v => typeof v === 'number' && Number.isFinite(v);
+const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
+// YYYY-MM-DD that exists on the calendar (rejects 2026-02-31, 2026-13-01)
+function isRealDate(v){
+  if (typeof v !== 'string' || !DATE_RE.test(v)) return false;
+  const [y,m,d] = v.split('-').map(Number);
+  const t = new Date(Date.UTC(y, m-1, d));
+  return t.getUTCFullYear() === y && t.getUTCMonth() === m-1 && t.getUTCDate() === d && y >= 1990 && y <= 2100;
+}
+// settings rules, shared with the Settings dialog
+function settingsErrors(n){
+  const e = [];
+  for (const k of NUM_SETTINGS) if (!isNum(n[k])) e.push(`settings.${k} must be a number.`);
+  if (!FORECAST_METHODS.includes(n.forecastMethod)) e.push(`settings.forecastMethod must be one of: ${FORECAST_METHODS.join(', ')}.`);
+  if (n.location !== null){
+    const L = n.location;
+    if (!isObj(L) || typeof L.name !== 'string' || !L.name.trim() || L.name.length > 200 || !isNum(L.latitude) || !isNum(L.longitude) || Math.abs(L.latitude) > 90 || Math.abs(L.longitude) > 180)
+      e.push('settings.location must be null or {name, latitude (-90 to 90), longitude (-180 to 180)}.');
+  }
+  if (e.length) return e;
+  if (!(n.cmToL > 0)) e.push('settings.cmToL (litres per cm) must be above 0.');
+  if (!(n.gaugeOffsetCm >= 0)) e.push('settings.gaugeOffsetCm must be 0 or more.');
+  if (!(n.fullGaugeCm > n.gaugeOffsetCm)) e.push('settings.fullGaugeCm must be above the gauge offset.');
+  if (!(n.reorderGaugeCm >= n.gaugeOffsetCm && n.reorderGaugeCm < n.fullGaugeCm)) e.push('settings.reorderGaugeCm must be between the gauge offset and the full level.');
+  if (!(n.hddBase >= 10 && n.hddBase <= 25)) e.push('settings.hddBase (degree-day base) must be between 10 and 25 °C.');
+  if (!(n.hddThreshold >= 5 && n.hddThreshold <= n.hddBase)) e.push('settings.hddThreshold (heating threshold) must be between 5 °C and the base temperature.');
+  return e;
+}
+function validate(obj){
+  const errors = [];
+  const err = t => { if (errors.length < MAX_ERRORS) errors.push(t); else if (errors.length === MAX_ERRORS) errors.push('…and more.'); };
+  if (!isObj(obj)) return {ok: false, errors: ['The file is not a heating oil tracker export (expected a JSON object).']};
+  if (obj.version !== undefined && obj.version !== SCHEMA_VERSION) err(`version is ${shown(obj.version)}; this app reads version ${SCHEMA_VERSION}.`);
+  if (!Array.isArray(obj.readings)) err('readings must be a list.');
+  if (!Array.isArray(obj.refills)) err('refills must be a list.');
+  if (errors.length) return {ok: false, errors};
+
+  // settings: optional as a whole; each missing field takes its default; present fields must be valid
+  let settings = {...DEFAULT_SETTINGS};
+  if (obj.settings !== undefined){
+    if (!isObj(obj.settings)) err('settings must be an object.');
+    else {
+      for (const k of Object.keys(DEFAULT_SETTINGS)) if (obj.settings[k] !== undefined) settings[k] = obj.settings[k];
+      if (isObj(settings.location)) settings.location = {name: settings.location.name, latitude: settings.location.latitude, longitude: settings.location.longitude};
+      settingsErrors(settings).forEach(err);
+    }
+  }
+
+  const seen = new Map(); // id -> where it was first used
+  function checkId(r, where){
+    if (r.id === undefined || r.id === null) return uid();
+    if (typeof r.id !== 'string' || r.id.trim() === '') { err(`${where}: id must be a non-empty text value (found ${shown(r.id)}).`); return null; }
+    if (seen.has(r.id)) { err(`${where}: id "${r.id}" is already used by ${seen.get(r.id)}.`); return null; }
+    seen.set(r.id, where); return r.id;
+  }
+  function checkNote(r, where){
+    if (r.note === undefined || r.note === null) return '';
+    if (typeof r.note !== 'string'){ err(`${where}: note must be text.`); return ''; }
+    if (r.note.length > 500){ err(`${where}: note is longer than 500 characters.`); return ''; }
+    return r.note;
+  }
+  // optional number: missing or null -> null; anything else must be a finite number
+  function optNum(r, key, where, rule, ruleText){
+    const v = r[key];
+    if (v === undefined || v === null) return null;
+    if (!isNum(v)){ err(`${where}: ${key} must be a number or null (found ${shown(v)}).`); return null; }
+    if (!rule(v)){ err(`${where}: ${key} ${ruleText} (found ${v}).`); return null; }
+    return v;
+  }
+  const label = (kind, i, r) => `${kind} ${i+1}` + (isObj(r) && typeof r.date === 'string' ? ` (${r.date})` : '');
+
+  const readings = obj.readings.map((r,i) => {
+    const where = label('Reading', i, r);
+    if (!isObj(r)){ err(`${where}: must be an object.`); return null; }
+    const id = checkId(r, where);
+    if (!isRealDate(r.date)) err(`${where}: date must be a real calendar date written YYYY-MM-DD (found ${shown(r.date)}).`);
+    if (!isNum(r.cm)) err(`${where}: cm is required and must be a number (found ${shown(r.cm)}).`);
+    else if (r.cm < 0 || r.cm > 500) err(`${where}: cm must be between 0 and 500 (found ${r.cm}).`);
+    return {id, date: r.date, cm: r.cm, note: checkNote(r, where)};
+  });
+
+  const refills = obj.refills.map((r,i) => {
+    const where = label('Refill', i, r);
+    if (!isObj(r)){ err(`${where}: must be an object.`); return null; }
+    const id = checkId(r, where);
+    if (!isRealDate(r.date)) err(`${where}: date must be a real calendar date written YYYY-MM-DD (found ${shown(r.date)}).`);
+    const litres = optNum(r, 'litres', where, v => v > 0, 'must be above 0');
+    const pricePerL = optNum(r, 'pricePerL', where, v => v > 0, 'must be above 0');
+    const totalEur = optNum(r, 'totalEur', where, v => v >= 0, 'must be 0 or more');
+    if (r.litres == null && r.pricePerL == null) err(`${where}: needs at least litres or pricePerL.`);
+    return {id, date: r.date, litres, pricePerL, totalEur, note: checkNote(r, where)};
+  });
+
+  if (errors.length) return {ok: false, errors};
+  return {ok: true, state: {version: SCHEMA_VERSION, settings, readings, refills}};
+}
+
+/* ---------- helpers ---------- */
+const $ = s => document.querySelector(s);
+const fL = v => v == null ? '–' : Math.round(v).toLocaleString('en-GB');
+const fE = v => v == null ? '–' : '€' + v.toLocaleString('en-GB', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const fP = v => v == null ? '–' : '€' + v.toFixed(3);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function todayStr(){ const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+const toMs = n => n * DAY;
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const fmtLong = n => { const d = new Date(n*DAY); return d.getUTCDate() + ' ' + MONTHS[d.getUTCMonth()] + ' ' + d.getUTCFullYear(); };
+const C = {ink:'#1E2A32', oil:'#C47A12', oilSoft:'rgba(196,122,18,.18)', steel:'#4F6B7D', steelSoft:'rgba(79,107,125,.25)', alert:'#A8322A', muted:'#5F6E78', line:'#D3DADC'};
+const SEASON_COLORS = ['#8FA3B0','#6E8797','#4F6B7D','#2F4E61','#8C5A12','#C47A12','#E0A24A','#A8322A'];
+
+/* ---------- weather (Open-Meteo) ----------
+   Cached in its own local storage key; not part of the export because it can always be downloaded again.
+   Source per day: 'a' = archive (reanalysis), 'r' = recent past from the forecast service, 'f' = today and forecast. */
+const WX_KEY = KEY + '.weather';
+const WX_MAX_AGE_MS = 6 * 3600 * 1000;
+let wxCache = null, wxBusy = false, wxBuilt = null, wxStatus = {ok: true, text: ''};
+function loadWx(){
+  if (!canStore) return;
+  try { const c = JSON.parse(localStorage.getItem(WX_KEY) || 'null'); if (isObj(c) && isNum(c.lat) && isNum(c.lon) && isObj(c.days)) wxCache = c; } catch(e){}
+}
+function saveWx(){ if (canStore){ try { localStorage.setItem(WX_KEY, JSON.stringify(wxCache)); } catch(e){} } }
+const sameLoc = (loc, c) => loc && c && Math.abs(loc.latitude - c.lat) < 1e-4 && Math.abs(loc.longitude - c.lon) < 1e-4;
+function wxForCompute(){
+  const loc = state.settings.location;
+  if (!loc || !wxCache || !sameLoc(loc, wxCache)) return null;
+  if (wxBuilt && wxBuilt.src === wxCache) return wxBuilt;
+  const temps = new Map(), bucket = Array.from({length: 365}, () => [0, 0]);
+  let lastObs = null, lastFc = null;
+  for (const [d, [t, src]] of Object.entries(wxCache.days)){
+    if (!DATE_RE.test(d) || !isNum(t)) continue;
+    const n = dn(d); temps.set(n, t);
+    if (src !== 'f'){ const b = bucket[doyOf(n)]; b[0] += t; b[1]++; if (lastObs == null || n > lastObs) lastObs = n; }
+    else if (lastFc == null || n > lastFc) lastFc = n;
+  }
+  // typical temperature per day of year: observed days, averaged over ±7 days
+  const raw = bucket.map(([s, c]) => c ? s / c : null);
+  const climo = raw.map((_, i) => { let s = 0, c = 0; for (let k = -7; k <= 7; k++){ const v = raw[(i + k + 365) % 365]; if (v != null){ s += v; c++; } } return c ? s / c : null; });
+  wxBuilt = {src: wxCache, temps, climo: climo.every(v => v != null) ? climo : null, lastObs, lastFc};
+  return wxBuilt;
+}
+function netError(e){
+  if (e && e.name === 'TypeError') return 'No connection to the weather service (offline, or blocked in this browser view).';
+  return (e && e.message) || 'Unknown error.';
+}
+async function fetchJson(url){
+  const r = await fetch(url);
+  let j = null; try { j = await r.json(); } catch(e){}
+  if (!r.ok || (j && j.error)) throw new Error((j && j.reason) ? `Weather service: ${j.reason}` : `Weather service returned HTTP ${r.status}.`);
+  if (!j) throw new Error('Weather service returned an unreadable response.');
+  return j;
+}
+// daily mean temperature; falls back to (max + min) / 2 only if the mean variable is rejected
+async function getDailyMean(baseUrl){
+  let j, kind = 'mean';
+  try { j = await fetchJson(baseUrl + '&daily=temperature_2m_mean'); }
+  catch(e){ if (!/temperature_2m_mean/i.test(e.message)) throw e; j = await fetchJson(baseUrl + '&daily=temperature_2m_max,temperature_2m_min'); kind = 'maxmin'; }
+  const d = j.daily;
+  if (!d || !Array.isArray(d.time)) throw new Error('Weather service response had no daily data.');
+  return d.time.map((t, i) => {
+    let v = null;
+    if (kind === 'mean') v = d.temperature_2m_mean ? d.temperature_2m_mean[i] : null;
+    else if (isNum(d.temperature_2m_max?.[i]) && isNum(d.temperature_2m_min?.[i])) v = (d.temperature_2m_max[i] + d.temperature_2m_min[i]) / 2;
+    return [t, v];
+  });
+}
+async function searchPlaces(q){
+  const j = await fetchJson(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=6&language=en&format=json`);
+  return (Array.isArray(j.results) ? j.results : []).filter(x => isNum(x.latitude) && isNum(x.longitude))
+    .map(x => ({name: [x.name, x.admin1, x.country].filter(Boolean).join(', '), latitude: x.latitude, longitude: x.longitude}));
+}
+async function refreshWeather(force){
+  const loc = state.settings.location;
+  if (!loc){ wxStatus = {ok: true, text: ''}; renderWxStatus(); return; }
+  if (wxBusy) return;
+  if (!force && wxCache && sameLoc(loc, wxCache) && Date.now() - Date.parse(wxCache.fetchedAt) < WX_MAX_AGE_MS){ renderWxStatus(); return; }
+  wxBusy = true; wxStatus = {ok: true, text: `Updating temperatures for ${loc.name}…`}; renderWxStatus();
+  try {
+    const t = dn(todayStr());
+    const firstN = state.readings.length ? Math.min(...state.readings.map(r => dn(r.date))) : t;
+    const wantStart = Math.min(firstN - 31, t - 3653);          // your data plus about 10 years for typical temperatures
+    const cache = (wxCache && sameLoc(loc, wxCache)) ? {...wxCache, days: {...wxCache.days}} : {lat: loc.latitude, lon: loc.longitude, days: {}};
+    const archived = Object.keys(cache.days).filter(k => cache.days[k][1] === 'a').sort();
+    let aStart = wantStart;
+    if (archived.length && dn(archived[0]) <= wantStart + 1) aStart = dn(archived[archived.length-1]) - 7;
+    const q = `latitude=${loc.latitude}&longitude=${loc.longitude}&timezone=auto`;
+    if (aStart <= t - 1){
+      const rows = await getDailyMean(`https://archive-api.open-meteo.com/v1/archive?${q}&start_date=${ds(aStart)}&end_date=${ds(t - 1)}`);
+      rows.forEach(([d, v]) => { if (isNum(v)) cache.days[d] = [Math.round(v * 100) / 100, 'a']; });
+    }
+    const fr = await getDailyMean(`https://api.open-meteo.com/v1/forecast?${q}&past_days=92&forecast_days=16`);
+    Object.keys(cache.days).forEach(k => { if (cache.days[k][1] === 'f') delete cache.days[k]; });
+    fr.forEach(([d, v]) => { if (!isNum(v) || !DATE_RE.test(d)) return; const cur = cache.days[d]; if (cur && cur[1] === 'a') return; cache.days[d] = [Math.round(v * 100) / 100, dn(d) < t ? 'r' : 'f']; });
+    cache.fetchedAt = new Date().toISOString();
+    wxCache = cache; wxBuilt = null; saveWx();
+    wxStatus = {ok: true, text: ''};
+  } catch(e){
+    wxStatus = {ok: false, text: `Temperatures couldn't be updated: ${netError(e)}${wxCache && sameLoc(loc, wxCache) ? ' Showing the temperatures saved earlier.' : ''}`};
+  } finally { wxBusy = false; render(); }
+}
+function renderWxStatus(){
+  const el = $('#wxNote'); if (!el) return;
+  const loc = state.settings.location;
+  let text;
+  if (!loc) text = 'Temperatures: set your location in Settings to show them.';
+  else if (wxStatus.text) text = wxStatus.text;
+  else if (wxCache && sameLoc(loc, wxCache)){
+    const w = wxForCompute();
+    text = `Temperatures for ${loc.name}, updated ${whenText(wxCache.fetchedAt)}.` + (w && w.lastFc ? ` Forecast to ${fmtD(w.lastFc)}.` : '') + ' Data: Open-Meteo.com.';
+  } else text = `Temperatures for ${loc.name} haven't been downloaded yet.`;
+  el.textContent = text;
+  el.classList.toggle('err', !wxStatus.ok);
+  $('#wxRefresh').hidden = !loc || wxBusy;
+}
+
+/* ---------- render ---------- */
+let charts = {};
+let lastComputed = null;
+function render(){
+  const S = state.settings;
+  const r = compute(state, todayStr(), wxForCompute());
+  lastComputed = r;
+  renderHero(r, S);
+  renderTables(r, S);
+  renderChecks(r);
+  renderWxStatus();
+  const method = r.useModel
+    ? `Forecast uses the temperature model (${r.model.base.toFixed(1)} L/day plus ${r.model.perHdd.toFixed(2)} L per degree day): actual temperatures up to today, the 16-day forecast, then typical temperatures for the time of year.`
+    : `Forecast uses your average daily use for each month. ${r.forecastReason}`;
+  $('#levelNote').textContent = 'Solid line: real litres from your readings. Dashed: estimate since the last reading and the forecast. ' + method;
+  $('#seasonLNote').textContent = 'Seasons run July to June. Projected litres run from the last reading to the end of the season, using the same forecast as the tank level.';
+  if (window.Chart) renderCharts(r, S); else { $('#chartBanner').hidden = false; renderTab(r); }
+}
+
+function renderHero(r, S){
+  const svg = $('#tankSvg');
+  if (!r.R.length){
+    $('#heroLitres').textContent = 'No readings yet';
+    $('#heroSub').textContent = 'Add your first gauge reading below.';
+    $('#reorderWhen').textContent = '–'; $('#reorderSub').textContent = ''; $('#stats').innerHTML = ''; svg.innerHTML = '';
+    return;
+  }
+  const pct = r.cap ? Math.min(1, r.nowL / r.cap) : 0;
+  const gaugeNow = r.nowL / S.cmToL + S.gaugeOffsetCm;
+  const daysSince = r.today - r.lastN;
+  const isEst = r.nowN > r.lastN || r.pending.length;
+  $('#heroLitres').innerHTML = `${fL(r.nowL)}<small>litres</small>`;
+  $('#heroSub').textContent = r.lastN > r.today
+    ? `The last reading is dated in the future (${fmtD(r.lastN)}). Check the date in the readings table.`
+    : isEst
+    ? `Estimated. About ${gaugeNow.toFixed(1)} cm on the gauge, ${Math.round(pct*100)}% full. Last reading was ${daysSince === 0 ? 'today' : `${daysSince} day${daysSince===1?'':'s'} ago`} (${fmtD(r.lastN)}).`
+    : `Measured today. ${Math.round(pct*100)}% full.`;
+
+  // tank drawing
+  const top = 18, h = 228, x = 58, w = 86;
+  const yOf = cm => top + h - ((cm - S.gaugeOffsetCm) / (S.fullGaugeCm - S.gaugeOffsetCm)) * h;
+  const fillY = top + h - pct*h, ry = yOf(S.reorderGaugeCm);
+  let ticks = '';
+  for (let cm = Math.ceil(S.gaugeOffsetCm/20)*20; cm <= S.fullGaugeCm; cm += 20){
+    const y = yOf(cm);
+    ticks += `<line x1="${x-10}" x2="${x-3}" y1="${y}" y2="${y}" stroke="${C.muted}"/><text x="${x-14}" y="${y+4}" font-size="11" text-anchor="end" fill="${C.muted}">${cm}</text>`;
+  }
+  svg.innerHTML = `
+    <defs><clipPath id="tk"><rect x="${x}" y="${top}" width="${w}" height="${h}" rx="16"/></clipPath></defs>
+    <rect x="${x}" y="${top}" width="${w}" height="${h}" rx="16" fill="#E4EAED"/>
+    <rect clip-path="url(#tk)" x="${x}" y="${fillY}" width="${w}" height="${top+h-fillY}" fill="${r.nowL <= r.reorderL ? C.alert : C.oil}"/>
+    <line x1="${x-4}" x2="${x+w+4}" y1="${ry}" y2="${ry}" stroke="${C.ink}" stroke-dasharray="4 3" stroke-width="1.5"/>
+    <text x="${x+w/2}" y="${ry-5}" font-size="10" text-anchor="middle" fill="${C.ink}">reorder</text>
+    <rect x="${x}" y="${top}" width="${w}" height="${h}" rx="16" fill="none" stroke="${C.ink}" stroke-width="2"/>
+    ${ticks}
+    <text x="${x-14}" y="${top+h+18}" font-size="10" text-anchor="end" fill="${C.muted}">cm</text>`;
+
+  // forecast
+  const box = $('#forecastBox');
+  box.classList.remove('urgent');
+  const orderL = Math.floor((r.cap - r.reorderL) / 10) * 10;
+  let when, sub;
+  if (r.reorderN != null && r.reorderN <= r.nowN){
+    box.classList.add('urgent');
+    when = 'Reorder now';
+    sub = r.nowL <= 0 ? 'The estimate says the tank may be empty. Add a gauge reading to confirm.' : `Below ${S.reorderGaugeCm} cm on the gauge (estimate). Add a reading to confirm.`;
+  } else if (r.reorderN != null){
+    const d = r.reorderN - r.nowN;
+    if (d <= 14) box.classList.add('urgent');
+    when = fmtLong(r.reorderN);
+    sub = `In ${d} days, at ${S.reorderGaugeCm} cm on the gauge.` + (r.emptyN ? ` Empty around ${fmtLong(r.emptyN)}.` : '');
+  } else { when = 'Not within 2 years'; sub = 'Your usage profile is too low to reach the reorder level.'; }
+  const pr = r.price.predict(r.reorderN ?? r.nowN);
+  if (pr != null) sub += ` Filling to full takes about ${fL(orderL)} L, roughly ${fE(orderL*pr)} at the trend price of ${fP(pr)}/L.`;
+  $('#reorderWhen').textContent = when;
+  sub += r.useModel ? ' Based on temperatures and the weather forecast.' : ' Based on your monthly averages.';
+  $('#reorderSub').textContent = sub;
+
+  const cur = r.seasons[r.seasons.length-1];
+  const lastRefill = r.F.filter(x => x.pricePerL != null).slice(-1)[0];
+  const stats = [
+    [r.recent ? `${fL(r.recent.lpd)} L/day` : '–', r.recent ? `Recent use (${fmtD(r.recent.a.n)} to ${fmtD(r.recent.b.n)})` : 'Recent use'],
+    [lastRefill ? fP(lastRefill.pricePerL) : '–', lastRefill ? `Last price paid (${fmtD(lastRefill.n)})` : 'Last price paid'],
+    [cur ? `${fL(cur.total)} L` : '–', cur ? `Season ${cur.label} forecast` : 'Season forecast'],
+    [cur ? fE(cur.consCost) : '–', cur ? `Season ${cur.label} cost forecast` : 'Season cost forecast']
+  ];
+  $('#stats').innerHTML = stats.map(([b,s]) => `<div class="stat"><b>${b}</b><span>${s}</span></div>`).join('');
+}
+
+const f2 = v => v == null ? '–' : v.toFixed(1);
+function renderTables(r, S){
+  // season table
+  const sh = `<tr><th>Season</th><th>Recorded L</th><th>Projected L</th><th>Total L</th><th>Bought L</th><th>Spent</th><th>Avg paid €/L</th><th>Consumption cost</th><th>Oct–Apr L/day</th><th>Oct–Apr °C</th><th>Degree days</th><th>L per degree day</th></tr>`;
+  $('#seasonTable').innerHTML = sh + r.seasons.map(s => `<tr>
+    <td>${s.label}${s.partialStart ? '<span class="tag">starts late</span>' : ''}${s.hasProj ? '<span class="tag">forecast</span>' : ''}</td>
+    <td>${fL(s.rec)}</td><td class="${s.hasProj?'est':''}">${s.hasProj ? fL(s.proj) : '–'}</td><td>${fL(s.total)}</td>
+    <td>${fL(s.bought)}</td><td>${fE(s.spent)}</td><td>${fP(s.avgPrice)}</td><td>${fE(s.consCost)}</td><td>${f2(s.heating.lpd)}</td><td>${f2(s.heating.temp)}</td><td>${s.heating.hddPeriod == null ? '–' : fL(s.heating.hddPeriod)}</td><td>${s.heating.lPerHdd == null ? '–' : s.heating.lPerHdd.toFixed(2)}</td></tr>`).join('');
+
+  // readings
+  const next = new Map(); r.iv.forEach(x => next.set(x.a.id, x));
+  const rh = `<tr><th>Date</th><th>Gauge cm</th><th>Real L</th><th>Days to next</th><th>L/day</th><th></th></tr>`;
+  $('#readingTable').innerHTML = rh + r.R.slice().reverse().map(x => {
+    const it = next.get(x.id);
+    const lpd = it ? (it.refill ? `<td class="est" title="Refill gap, estimated">${it.lpd.toFixed(1)}</td>` : `<td>${it.lpd != null ? it.lpd.toFixed(1) : '–'}</td>`) : '<td>–</td>';
+    return `<tr class="${it && it.refill ? 'refill-row' : ''}"><td>${fmtD(x.n)}${x.note ? ' <span class="tag" title="'+esc(x.note)+'">note</span>' : ''}</td>
+      <td class="${x.cm < S.gaugeOffsetCm ? 'flag' : ''}">${x.cm}</td><td>${fL(x.L)}</td><td>${it ? it.days : '–'}</td>${lpd}
+      <td><button class="btn small" data-edit-r="${x.id}">Edit</button> <button class="btn small danger" data-del-r="${x.id}">Delete</button></td></tr>`;
+  }).join('');
+
+  // refills
+  const fh = `<tr><th>Date</th><th>Litres</th><th>€/L</th><th>Total</th><th>Measured L</th><th>Difference</th><th></th></tr>`;
+  $('#refillTable').innerHTML = fh + r.F.slice().reverse().map(x => {
+    const tol = x.litres != null ? Math.max(30, 0.05*x.litres) : 0;
+    const diffCell = x.diff != null ? `<td class="${Math.abs(x.diff) > tol ? 'flag' : ''}">${x.diff>0?'+':''}${fL(x.diff)}${x.group>1?' (shared)':''}</td>`
+      : `<td class="est">${x.pending ? 'after last reading' : x.longGap ? `gap of ${x.gapDays} days, not checked` : x.unmatched ? 'no match' : '–'}</td>`;
+    return `<tr><td>${fmtD(x.n)}${x.note ? ' <span class="tag" title="'+esc(x.note)+'">note</span>' : ''}</td>
+      <td>${x.litres ?? '–'}</td><td>${fP(x.pricePerL)}</td><td>${fE(x.total)}${x.totalManual ? ' <span class="tag" title="Total entered manually">set</span>' : ''}</td>
+      <td>${x.measured != null ? fL(x.measured) : '–'}</td>${diffCell}
+      <td><button class="btn small" data-edit-f="${x.id}">Edit</button> <button class="btn small danger" data-del-f="${x.id}">Delete</button></td></tr>`;
+  }).join('');
+}
+
+function renderChecks(r){
+  const list = r.checks.slice().sort((a,b) => b.warn - a.warn);
+  const stale = r.R.length ? r.today - r.lastN : 0;
+  if (stale > 14) list.unshift({warn:true, text:`The last reading is ${stale} days old, so the current level is an estimate. Add a reading to correct it.`});
+  $('#checks').innerHTML = list.length ? list.map(c => `<li class="${c.warn?'warn':''}">${esc(c.text)}</li>`).join('') : '<li>No issues found.</li>';
+}
+
+function monthTicks(min, max, stepMonths){
+  const out = []; const d0 = new Date(min); let y = d0.getUTCFullYear(), m = d0.getUTCMonth();
+  m = Math.ceil(m/stepMonths)*stepMonths;
+  while (true){ const t = Date.UTC(y + Math.floor(m/12), m%12, 1); if (t > max) break; if (t >= min) out.push({value: t}); m += stepMonths; }
+  return out;
+}
+function mk(id, cfg){ if (charts[id]) charts[id].destroy(); charts[id] = new Chart(document.getElementById(id), cfg); }
+const baseOpts = () => ({responsive:true, maintainAspectRatio:false, animation:false, interaction:{mode:'nearest', intersect:false},
+  plugins:{legend:{labels:{boxWidth:12, font:{family:'Barlow'}}}}, scales:{}});
+
+/* ---------- consumption tabs ---------- */
+let activeTab = 'cum', lastR = null;
+const TAB_SEASON_PICK = ['rate', 'month'], TAB_NEEDS_TEMP = ['hdd', 'scatter'];
+const seasonColor = (r, s) => SEASON_COLORS[Math.max(0, r.seasons.findIndex(x => x.s === s)) % SEASON_COLORS.length];
+const dayLabel = x => { const d = new Date(Date.UTC(2001, 6, 1) + Math.round(x) * DAY); return d.getUTCDate() + ' ' + MONTHS[d.getUTCMonth()]; };
+function dayAxis(){
+  const mStarts = []; for (let m = 0; m < 12; m++) mStarts.push((Date.UTC(2001, 6+m, 1) - Date.UTC(2001, 6, 1)) / DAY);
+  return {type:'linear', min:0, max:365, afterBuildTicks: ax => { ax.ticks = mStarts.map(v => ({value: v})); },
+    ticks:{callback: v => { const i = mStarts.indexOf(v); return i < 0 ? '' : MONTHS[(6 + i) % 12]; }}, grid:{color:C.line}};
+}
+const tempAxis = () => ({position:'right', title:{display:true, text:'°C'}, grid:{drawOnChartArea:false}});
+const f1 = v => v == null ? '–' : v.toFixed(1);
+
+function tabCum(r){
+  const sets = [];
+  r.seasons.forEach(s => {
+    const a = seasonStart(s.s), e = seasonStart(s.s+1), col = seasonColor(r, s.s);
+    let cum = 0; const pts = [], proj = [];
+    const from = Math.max(a, r.cs), to = Math.min(e, r.ce);
+    if (from < to){ pts.push({x: from-a, y:0}); for (let d = from; d < to; d++){ cum += r.daily.get(d) || 0; if ((d-a) % 3 === 0 || d === to-1) pts.push({x: d-a+1, y: Math.round(cum)}); } }
+    if (s.hasProj){ let c2 = cum; const pf = Math.max(a, r.ce); proj.push({x: pf-a, y: Math.round(c2)}); for (let d = pf; d < e; d++){ c2 += r.use(d); if ((d-a) % 5 === 0 || d === e-1) proj.push({x: d-a+1, y: Math.round(c2)}); } }
+    if (pts.length) sets.push({label: s.label, data: pts, borderColor: col, backgroundColor: col, pointRadius:0, tension:0, borderWidth:2});
+    if (proj.length) sets.push({label: s.label + ' forecast', data: proj, borderColor: col, backgroundColor: col, borderDash:[5,4], pointRadius:0, tension:0, borderWidth:2});
+  });
+  const o = baseOpts(); o.scales.x = dayAxis(); o.scales.y = {min:0, title:{display:true, text:'Litres since 1 July'}, grid:{color:C.line}};
+  o.plugins.tooltip = {callbacks:{title: it => dayLabel(it[0].parsed.x), label: it => `${it.dataset.label}: ${fL(it.parsed.y)} L`}};
+  return {cfg: {type:'line', options:o, data:{datasets: sets}}, note: 'Litres used since 1 July in each season. Dashed lines: forecast to the end of the season.'};
+}
+
+const SMOOTH_DAYS = 14;
+let smoothOn = false;
+function tabRate(r, sel){
+  const list = sel === 'all' ? r.seasons : r.seasons.filter(s => String(s.s) === sel);
+  const sets = [];
+  list.forEach(so => {
+    const a = seasonStart(so.s), e = seasonStart(so.s+1), pts = [], col = seasonColor(r, so.s);
+    if (smoothOn){
+      // centred 14-day average of daily use; needs at least half the window recorded
+      const from = Math.max(a, r.cs), to = Math.min(e, r.ce), half = SMOOTH_DAYS / 2;
+      for (let d = from; d < to; d++){
+        let sum = 0, c = 0;
+        for (let k = d - half; k < d + half; k++) if (k >= r.cs && k < r.ce){ sum += r.daily.get(k) || 0; c++; }
+        if (c >= half) pts.push({x: d - a, y: +(sum / c).toFixed(2), sm: true});
+      }
+    } else {
+      r.iv.forEach(x => {
+        if (x.days <= 0) return;
+        const from = Math.max(x.a.n, a), to = Math.min(x.b.n, e); if (from >= to) return;
+        const y = +x.lpd.toFixed(2);
+        pts.push({x: from-a, y, iv: x, est: !!x.refill}, {x: to-a, y, iv: x, est: !!x.refill});
+      });
+    }
+    if (pts.length) sets.push({label: so.label, data: pts, borderColor: col, backgroundColor: col, pointRadius:0, borderWidth:2, tension: smoothOn ? 0.3 : 0, yAxisID:'y',
+      // dotted where the segment ends in an estimated refill gap
+      segment: {borderDash: ctx => { const p = pts[ctx.p1DataIndex]; return p && p.est ? [3,3] : undefined; }}});
+  });
+  const o = baseOpts(); o.scales.x = dayAxis(); o.scales.y = {min:0, title:{display:true, text: smoothOn ? `Litres per day (${SMOOTH_DAYS}-day average)` : 'Litres per day'}, grid:{color:C.line}};
+  let withTemp = false;
+  if (sel !== 'all' && r.temps && list.length){
+    const a = seasonStart(list[0].s), e = Math.min(seasonStart(list[0].s + 1), r.today), tp = [];
+    for (let d = a; d < e; d++){ let sT = 0, c = 0; for (let k = -3; k <= 3; k++) if (r.temps.has(d+k) && d+k < r.today){ sT += r.temps.get(d+k); c++; } if (c >= 4) tp.push({x: d-a, y: +(sT/c).toFixed(1)}); }
+    if (tp.length){ sets.push({label: 'Temperature (7-day average)', data: tp, borderColor: C.alert, backgroundColor: C.alert, borderWidth:1.5, pointRadius:0, tension:0.2, yAxisID:'y1'}); o.scales.y1 = tempAxis(); withTemp = true; }
+  }
+  o.plugins.tooltip = {callbacks:{title: it => dayLabel(it[0].parsed.x), label: it => {
+    const p = it.raw; if (it.dataset.yAxisID === 'y1') return `Temperature: ${p.y.toFixed(1)} °C`;
+    if (p.sm) return `${it.dataset.label}: ${p.y.toFixed(1)} L/day (${SMOOTH_DAYS}-day average)`;
+    if (!p.iv) return '';
+    return `${it.dataset.label}: ${p.y.toFixed(1)} L/day ${p.est ? 'estimated, refill gap' : 'measured'} (${fmtD(p.iv.a.n)} to ${fmtD(p.iv.b.n)}, ${p.iv.days} day${p.iv.days === 1 ? '' : 's'})`; }}};
+  const note = (smoothOn
+      ? `${SMOOTH_DAYS}-day average of daily use, centred on each day. It includes the estimated refill gaps and spreads long gaps between readings evenly, so it shows the trend rather than exact measurements. Switch smoothing off to see the measured rates.`
+      : 'Measured litres per day between consecutive readings, drawn as steps. Dotted: refill gaps, where use is estimated because the refill hides it. A long gap between readings shows as one flat rate. Readings a few days apart look jumpy because the gauge is read to 0.5 cm (about 4.7 L).')
+    + (sel === 'all' ? ' Pick a season to add its temperature.' : withTemp ? '' : ' Set your location in Settings to add temperature.');
+  return {cfg: {type:'line', options:o, data:{datasets: sets}}, note};
+}
+
+function tabMonth(r, sel){
+  const labels = r.ORDER.map(m => MONTHS[m]), sets = [], o = baseOpts();
+  o.scales = {x:{grid:{display:false}}, y:{min:0, title:{display:true, text:'Litres per day'}, grid:{color:C.line}}};
+  const lineT = (label, data, col, dash) => ({type:'line', label, data: data.map(v => v == null ? null : +v.toFixed(1)), borderColor: col, backgroundColor: col, borderDash: dash || [], pointRadius:3, tension:0.25, yAxisID:'y1', order:0});
+  if (sel === 'all'){
+    r.seasons.filter(s => s.monthly.some(m => m.lpd != null)).forEach(s => sets.push({label: s.label, data: s.monthly.map(m => m.lpd == null ? null : +m.lpd.toFixed(2)), backgroundColor: seasonColor(r, s.s), order:1}));
+    if (r.temps){ sets.push(lineT('Average temperature', r.avgMonthTemp, C.alert)); }
+  } else {
+    const so = r.seasons.find(s => String(s.s) === sel);
+    if (so){
+      sets.push({label: so.label, data: so.monthly.map(m => m.lpd == null ? null : +m.lpd.toFixed(2)), backgroundColor: seasonColor(r, so.s), order:1});
+      sets.push({label: 'Average, all seasons', data: r.avgMonthLpd.map(v => v == null ? null : +v.toFixed(2)), backgroundColor: C.steelSoft, order:1});
+      if (r.temps){ sets.push(lineT(`Temperature ${so.label}`, so.monthly.map(m => m.temp), C.alert)); sets.push(lineT('Average temperature', r.avgMonthTemp, C.muted, [4,3])); }
+    }
+  }
+  if (r.temps) o.scales.y1 = tempAxis();
+  o.plugins.tooltip = {callbacks:{label: it => it.dataset.yAxisID === 'y1' ? `${it.dataset.label}: ${it.parsed.y.toFixed(1)} °C` : `${it.dataset.label}: ${it.parsed.y.toFixed(1)} L/day`}};
+  return {cfg: {type:'bar', options:o, data:{labels, datasets: sets}},
+    note: 'Average litres per day in each calendar month, from recorded days only. Months with fewer than 7 recorded days are left out. Long gaps between readings are spread evenly, so summer months are approximate.' + (r.temps ? ' Temperature: monthly mean.' : ' Set your location in Settings to add temperature.')};
+}
+
+function partialNote(list){
+  const p = list.filter(s => s.heating.days < s.heating.totalDays);
+  return p.length ? ' * Partly recorded: ' + p.map(s => `${s.label} (${s.heating.days} of ${s.heating.totalDays} days)`).join(', ') + '.' : '';
+}
+function tabSeason(r){
+  const list = r.seasons.filter(s => s.heating.days > 0);
+  const labels = list.map(s => s.label + (s.heating.days < s.heating.totalDays ? '*' : ''));
+  const sets = [{label: 'Average L/day, 1 Oct to 30 Apr', data: list.map(s => +s.heating.lpd.toFixed(2)), backgroundColor: list.map(s => seasonColor(r, s.s)), order:1}];
+  const o = baseOpts(); o.scales = {x:{grid:{display:false}}, y:{min:0, title:{display:true, text:'Litres per day'}, grid:{color:C.line}}};
+  if (r.temps){ sets.push({type:'line', label: 'Average temperature, 1 Oct to 30 Apr', data: list.map(s => s.heating.temp == null ? null : +s.heating.temp.toFixed(1)), borderColor: C.alert, backgroundColor: C.alert, pointRadius:4, tension:0, yAxisID:'y1', order:0}); o.scales.y1 = tempAxis(); }
+  o.plugins.tooltip = {callbacks:{label: it => it.dataset.yAxisID === 'y1' ? `${it.dataset.label}: ${it.parsed.y.toFixed(1)} °C` : `${it.parsed.y.toFixed(1)} L/day over ${list[it.dataIndex]?.heating.days ?? '?'} recorded days`}};
+  return {cfg: {type:'bar', options:o, data:{labels, datasets: sets}},
+    note: 'Average litres per day over the heating period, 1 October to 30 April, using recorded days only.' + partialNote(list) + (r.temps ? '' : ' Set your location in Settings to add temperature.')};
+}
+
+function tabHdd(r){
+  const list = r.seasons.filter(s => s.heating.lPerHdd != null);
+  const labels = list.map(s => s.label + (s.heating.days < s.heating.totalDays ? '*' : ''));
+  const o = baseOpts(); o.scales = {x:{grid:{display:false}}, y:{min:0, title:{display:true, text:'Litres per degree day'}, grid:{color:C.line}}, y1:{position:'right', min:0, title:{display:true, text:'Degree days'}, grid:{drawOnChartArea:false}}};
+  const sets = [
+    {label: 'Litres per degree day', data: list.map(s => +s.heating.lPerHdd.toFixed(2)), backgroundColor: list.map(s => seasonColor(r, s.s)), order:1},
+    {type:'line', label: 'Degree days, 1 Oct to 30 Apr', data: list.map(s => s.heating.hddPeriod == null ? null : Math.round(s.heating.hddPeriod)), borderColor: C.ink, backgroundColor: C.ink, pointRadius:4, tension:0, yAxisID:'y1', order:0}
+  ];
+  o.plugins.tooltip = {callbacks:{label: it => it.dataset.yAxisID === 'y1' ? `${fL(it.parsed.y)} degree days` : (h => h ? `${it.parsed.y.toFixed(2)} L per degree day (${fL(h.litres)} L ÷ ${fL(h.hddRecorded)} degree days)` : `${it.parsed.y.toFixed(2)} L per degree day`)(list[it.dataIndex]?.heating)}};
+  const S = state.settings, m = r.model;
+  const note = `Litres per degree day = litres used ÷ degree days over the same recorded days, 1 October to 30 April. Lower means less oil for the same cold. The line shows how cold each heating period was (base ${S.hddBase} °C, threshold ${S.hddThreshold} °C).` + partialNote(list)
+    + (m ? ` Fitted over all readings: about ${m.base.toFixed(1)} L/day baseline plus ${m.perHdd.toFixed(2)} L per degree day, explaining ${Math.round(Math.max(0, m.r2) * 100)}% of the variation.` : '');
+  return {cfg: {type:'bar', options:o, data:{labels, datasets: sets}}, note};
+}
+
+function tabScatter(r){
+  const sets = [];
+  let tMin = Infinity, tMax = -Infinity;
+  r.seasons.forEach(so => {
+    const a = seasonStart(so.s), e = seasonStart(so.s+1);
+    const pts = r.iv.filter(x => !x.refill && x.days > 0 && x.tMean != null && x.a.n >= a && x.a.n < e)
+      .map(x => { tMin = Math.min(tMin, x.tMean); tMax = Math.max(tMax, x.tMean); return {x: +x.tMean.toFixed(2), y: +x.lpd.toFixed(2), r: Math.min(14, 3 + Math.sqrt(x.days)), iv: x}; });
+    if (pts.length){ const c = seasonColor(r, so.s); sets.push({label: so.label, data: pts, backgroundColor: c + 'B3', borderColor: c}); }
+  });
+  const m = r.model, S = state.settings;
+  if (m && isFinite(tMin)){
+    const curve = []; for (let t = Math.floor(tMin) - 1; t <= Math.ceil(tMax) + 1; t += 0.25) curve.push({x: t, y: +(m.base + m.perHdd * r.hddOf(t)).toFixed(2)});
+    sets.push({type:'line', label: 'Fitted model', data: curve, borderColor: C.ink, backgroundColor: C.ink, pointRadius:0, borderWidth:2, tension:0});
+  }
+  const o = baseOpts();
+  o.scales = {x:{type:'linear', title:{display:true, text:'Average temperature between readings (°C)'}, grid:{color:C.line}}, y:{min:0, title:{display:true, text:'Litres per day'}, grid:{color:C.line}}};
+  o.plugins.tooltip = {callbacks:{label: it => { const p = it.raw; return p.iv ? `${fmtD(p.iv.a.n)} to ${fmtD(p.iv.b.n)} (${p.iv.days} days): ${p.x.toFixed(1)} °C, ${p.y.toFixed(1)} L/day` : `Model at ${p.x.toFixed(1)} °C: ${p.y.toFixed(1)} L/day`; }}};
+  const note = 'Each bubble is one gap between readings: its average temperature against litres per day. Bigger bubbles cover more days.'
+    + (m ? ` Line: fitted model, ${m.base.toFixed(1)} L/day plus ${m.perHdd.toFixed(2)} L/day for each degree below ${S.hddBase} °C on days at or below ${S.hddThreshold} °C (explains ${Math.round(Math.max(0, m.r2) * 100)}%). The step at ${S.hddThreshold} °C comes from the heating threshold.` : ' At least 5 gaps with temperatures are needed to fit a model.');
+  return {cfg: {type:'bubble', options:o, data:{datasets: sets}}, note};
+}
+
+function renderTab(r){
+  lastR = r;
+  document.querySelectorAll('.tab').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === activeTab ? 'true' : 'false'));
+  const pick = $('#seasonPick'), cur = pick.value;
+  const opts = [['all', 'All seasons'], ...r.seasons.filter(s => s.rec > 0).map(s => [String(s.s), s.label])];
+  pick.innerHTML = opts.map(([v, t]) => `<option value="${v}">${t}</option>`).join('');
+  pick.value = opts.some(o => o[0] === cur) ? cur : 'all';
+  $('#seasonPickLabel').hidden = !TAB_SEASON_PICK.includes(activeTab);
+  $('#smoothLabel').hidden = activeTab !== 'rate';
+  $('#smoothToggle').checked = smoothOn;
+  const canvas = $('#chTab'), empty = $('#tabEmpty');
+  let why = null;
+  if (!r.R.length) why = 'Add readings to see this view.';
+  else if (!window.Chart) why = 'Charts need an internet connection the first time the page loads.';
+  else if (TAB_NEEDS_TEMP.includes(activeTab) && !r.temps) why = state.settings.location ? 'Temperatures are not available yet. Use "Update temperatures" below.' : 'This view needs temperatures. Set your location in Settings.';
+  if (why){ if (charts.chTab){ charts.chTab.destroy(); delete charts.chTab; } canvas.hidden = true; empty.hidden = false; empty.textContent = why; $('#tabNote').textContent = ''; return; }
+  canvas.hidden = false; empty.hidden = true;
+  const {cfg, note} = ({cum: tabCum, rate: tabRate, month: tabMonth, season: tabSeason, hdd: tabHdd, scatter: tabScatter})[activeTab](r, pick.value);
+  mk('chTab', cfg);
+  $('#tabNote').textContent = note;
+}
+document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => { activeTab = b.dataset.tab; if (lastR) renderTab(lastR); }));
+$('#seasonPick').addEventListener('change', () => { if (lastR) renderTab(lastR); });
+$('#smoothToggle').addEventListener('change', e => { smoothOn = e.target.checked; if (lastR) renderTab(lastR); });
+$('#wxRefresh').addEventListener('click', () => refreshWeather(true));
+
+function renderCharts(r, S){
+  Chart.defaults.font.family = 'Barlow'; Chart.defaults.color = C.muted;
+  if (!r.R.length){ Object.values(charts).forEach(c => c.destroy()); charts = {}; renderTab(r); return; }
+
+  // level chart
+  const hist = r.R.map(x => ({x: toMs(x.n), y: Math.round(x.L)}));
+  const est = r.est.map(p => ({x: toMs(p.n), y: Math.round(p.L)}));
+  const fc = r.fc.filter((p,i) => i % 2 === 0 || i === r.fc.length-1).map(p => ({x: toMs(p.n), y: Math.round(p.L)}));
+  const refillPts = r.F.filter(x => x.litres != null).map(x => ({x: toMs(x.n), y: x.iv ? Math.round(x.iv.b.L) : null, litres: x.litres, price: x.pricePerL})).filter(p => p.y != null);
+  const xmin = toMs(r.R[0].n), xmax = toMs((r.fc.length ? r.fc[r.fc.length-1].n : r.lastN) + 10);
+  const o = baseOpts();
+  o.scales.x = {type:'linear', min:xmin, max:xmax, afterBuildTicks: ax => { ax.ticks = monthTicks(xmin, xmax, 6); },
+    ticks:{callback: v => { const d = new Date(v); return MONTHS[d.getUTCMonth()] + ' ' + String(d.getUTCFullYear()).slice(2); }}, grid:{color:C.line}};
+  o.scales.y = {min:0, suggestedMax: Math.ceil(r.cap/100)*100, title:{display:true, text:'Real litres'}, grid:{color:C.line}};
+  o.plugins.tooltip = {callbacks:{title: it => fmtD(Math.round(it[0].parsed.x / DAY)), label: it => {
+    const raw = it.raw; if (raw.litres) return `Refill ${raw.litres} L at €${raw.price}/L`; return `${it.dataset.label}: ${fL(it.parsed.y)} L`; }}};
+  mk('chLevel', {type:'line', options:o, data:{datasets:[
+    {label:'Measured', data:hist, borderColor:C.steel, backgroundColor:C.steelSoft, fill:true, pointRadius:2, tension:0},
+    {label:'Estimated since last reading', data:est, borderColor:C.oil, borderDash:[5,4], pointRadius:0, tension:0},
+    {label:'Forecast', data:fc, borderColor:C.alert, borderDash:[5,4], pointRadius:0, tension:0},
+    {label:'Refill', data:refillPts, type:'scatter', pointStyle:'triangle', pointRadius:6, backgroundColor:C.oil, borderColor:C.oil},
+    {label:`Reorder (${S.reorderGaugeCm} cm)`, data:[{x:xmin, y:r.reorderL},{x:xmax, y:r.reorderL}], borderColor:C.ink, borderWidth:1, borderDash:[2,3], pointRadius:0}
+  ]}});
+
+  // season litres
+  const labels = r.seasons.map(s => s.label);
+  const o2 = baseOpts(); o2.scales = {x:{stacked:true, grid:{display:false}}, y:{stacked:true, title:{display:true, text:'Litres'}, grid:{color:C.line}}};
+  o2.plugins.tooltip = {callbacks:{label: it => `${it.dataset.label}: ${fL(it.parsed.y)} L`}};
+  mk('chSeasonL', {type:'bar', options:o2, data:{labels, datasets:[
+    {label:'Recorded', data:r.seasons.map(s => Math.round(s.rec)), backgroundColor:C.steel},
+    {label:'Projected', data:r.seasons.map(s => Math.round(s.proj)), backgroundColor:C.oilSoft, borderColor:C.oil, borderWidth:1, borderDash:[4,3]}
+  ]}});
+
+  // season cost
+  const o3 = baseOpts(); o3.scales = {x:{grid:{display:false}}, y:{title:{display:true, text:'€'}, grid:{color:C.line}}};
+  o3.plugins.tooltip = {callbacks:{label: it => `${it.dataset.label}: ${fE(it.parsed.y)}`}};
+  mk('chSeasonC', {type:'bar', options:o3, data:{labels, datasets:[
+    {label:'Spent on refills', data:r.seasons.map(s => +s.spent.toFixed(2)), backgroundColor:C.steel},
+    {label:'Consumption cost (incl. forecast)', data:r.seasons.map(s => +s.consCost.toFixed(2)), backgroundColor:C.oilSoft, borderColor:C.oil, borderWidth:1}
+  ]}});
+
+  renderTab(r);
+
+  // price
+  const P = r.price.points;
+  const pmin = toMs(P.length ? P[0].x : r.lastN), pEnd = r.today + 365, pmax = toMs(pEnd);
+  const o6 = baseOpts();
+  o6.scales.x = {type:'linear', min:pmin - 20*DAY, max:pmax, afterBuildTicks: ax => { ax.ticks = monthTicks(pmin - 20*DAY, pmax, 6); },
+    ticks:{callback: v => { const d = new Date(v); return MONTHS[d.getUTCMonth()] + ' ' + String(d.getUTCFullYear()).slice(2); }}, grid:{color:C.line}};
+  o6.scales.y = {title:{display:true, text:'€ per litre'}, grid:{color:C.line}};
+  o6.plugins.tooltip = {filter: it => it.datasetIndex >= 2, callbacks:{title: it => fmtD(Math.round(it[0].parsed.x / DAY)), label: it => `${it.dataset.label}: €${it.parsed.y.toFixed(3)}`}};
+  const tl = [], up = [], lo = [];
+  if (P.length){
+    const steps = 24, s0 = P[0].x;
+    for (let i = 0; i <= steps; i++){ const d = s0 + (pEnd - s0) * i/steps, v = r.price.predict(d);
+      tl.push({x: toMs(d), y: +v.toFixed(4)}); up.push({x: toMs(d), y: +(v + r.price.sd).toFixed(4)}); lo.push({x: toMs(d), y: +(v - r.price.sd).toFixed(4)}); }
+  }
+  mk('chPrice', {type:'line', options:o6, data:{datasets:[
+    {label:'Typical spread (±1 sd)', data: up, borderWidth:0, pointRadius:0, backgroundColor:C.oilSoft, fill:'+1'},
+    {label:'_lo', data: lo, borderWidth:0, pointRadius:0},
+    {label:'Trend', data: tl, borderColor:C.oil, borderDash:[5,4], pointRadius:0, borderWidth:2},
+    {label:'Price paid', data: P.map(p => ({x: toMs(p.x), y: p.y})), type:'scatter', backgroundColor:C.ink, pointRadius:4}
+  ]}});
+  charts.chPrice.options.plugins.legend.labels.filter = it => it.text !== '_lo';
+  charts.chPrice.update();
+
+  const pr = r.price;
+  const nowP = pr.predict(r.today), yrP = pr.predict(r.today + 365);
+  $('#priceNote').textContent = P.length >= 3
+    ? `Trend from ${P.length} prices: ${pr.slopePerYear >= 0 ? '+' : ''}${(pr.slopePerYear*100).toFixed(1)} cents per litre per year. Today's trend value is €${nowP.toFixed(3)}, in 12 months €${yrP.toFixed(3)}. Typical spread ±€${pr.sd.toFixed(3)}. The trend explains ${pr.r2 != null ? Math.round(Math.max(0,pr.r2)*100) : 0}% of past price moves, so treat it as a rough guide: real prices follow crude oil and taxes.`
+    : 'At least 3 prices are needed for a trend.';
+}
+
+/* ---------- messages and confirmation (no alert/confirm: they are blocked in sandboxed previews) ---------- */
+function msg(id, text, ok){ const el = $(id); el.textContent = text; el.className = 'status ' + (ok ? 'ok' : 'err'); }
+function ask(text, yesLabel, infoOnly){
+  return new Promise(res => {
+    const d = $('#askDlg'); $('#askText').textContent = text; $('#askYes').textContent = yesLabel || 'Confirm'; $('#askNo').hidden = !!infoOnly;
+    const done = v => { d.close(); $('#askYes').onclick = $('#askNo').onclick = null; d.oncancel = null; res(v); };
+    $('#askYes').onclick = () => done(true); $('#askNo').onclick = () => done(false); d.oncancel = e => { e.preventDefault(); done(false); };
+    d.showModal();
+  });
+}
+// accepts "37,5" or "37.5"; returns null for empty, NaN for invalid
+function parseNum(v){ const t = String(v ?? '').trim().replace(/\s/g,'').replace(',', '.'); if (t === '') return null; return /^-?\d*\.?\d+$/.test(t) ? Number(t) : NaN; }
+const showNum = v => v == null ? '' : String(v).replace('.', ',');
+
+/* ---------- backup reminder ----------
+   Kept in its own local storage key so exports and the JSON schema are unchanged.
+   The browser can't report whether a download was actually saved, so "exported" means the Export button was used. */
+const META_KEY = KEY + '.backup';
+let meta = {lastExportAt: null, changes: 0};
+function loadMeta(){
+  if (!canStore) return;
+  try {
+    const m = JSON.parse(localStorage.getItem(META_KEY) || 'null');
+    if (isObj(m)){
+      meta.lastExportAt = (typeof m.lastExportAt === 'string' && !isNaN(Date.parse(m.lastExportAt))) ? m.lastExportAt : null;
+      meta.changes = (Number.isInteger(m.changes) && m.changes >= 0) ? m.changes : 0;
+    }
+  } catch(e){}
+}
+function saveMeta(){ if (canStore){ try { localStorage.setItem(META_KEY, JSON.stringify(meta)); } catch(e){} } }
+function markChanged(){ meta.changes++; saveMeta(); renderBackup(); }
+function markBackedUp(iso){ meta.lastExportAt = iso; meta.changes = 0; saveMeta(); renderBackup(); }
+function agoText(iso){
+  const d = new Date(iso), a = new Date(d.getFullYear(), d.getMonth(), d.getDate()), b = new Date(); b.setHours(0,0,0,0);
+  const days = Math.round((b - a) / DAY);
+  return days <= 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`;
+}
+function whenText(iso){ const d = new Date(iso); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }
+const changesText = n => `${n} change${n === 1 ? '' : 's'}`;
+function renderBackup(){
+  const bar = $('#backupBar'), btn = $('#btnExport');
+  let text, due;
+  if (!meta.lastExportAt){
+    due = true;
+    text = 'Not exported yet. Export your data and keep the file on Google Drive' + (meta.changes ? ` (${changesText(meta.changes)} so far).` : '.');
+  } else if (meta.changes > 0){
+    due = true;
+    text = `${changesText(meta.changes)} since the last export on ${whenText(meta.lastExportAt)} (${agoText(meta.lastExportAt)}). Export to back ${meta.changes === 1 ? 'it' : 'them'} up.`;
+  } else {
+    due = false;
+    text = `All changes exported. Last export ${whenText(meta.lastExportAt)} (${agoText(meta.lastExportAt)}).`;
+  }
+  bar.textContent = text;
+  bar.classList.toggle('due', due);
+  btn.classList.toggle('primary', due);
+}
+const unexportedHint = () => meta.changes ? ` ${changesText(meta.changes)} not exported yet.` : '';
+
+/* ---------- entry panels ---------- */
+const rf = $('#readingForm'), ff = $('#refillForm');
+const fld = (root, name) => root.querySelector(`[name="${name}"]`);
+let editR = null, editF = null;
+function clearFields(root){ root.querySelectorAll('input').forEach(i => { i.value = ''; }); }
+function resetReading(){ clearFields(rf); fld(rf,'date').value = todayStr(); fld(rf,'date').max = todayStr(); editR = null; $('#readingTitle').textContent = 'Add a gauge reading'; $('#readingSubmit').textContent = 'Add reading'; $('#readingCancel').hidden = true; $('#readingPanel').classList.remove('editing'); }
+function resetRefill(){ clearFields(ff); fld(ff,'date').value = todayStr(); fld(ff,'date').max = todayStr(); editF = null; $('#refillTitle').textContent = 'Add a refill'; $('#refillSubmit').textContent = 'Add refill'; $('#refillCancel').hidden = true; $('#afterCmLabel').hidden = false; $('#refillPanel').classList.remove('editing'); updateTotalHint(); }
+function updateTotalHint(){ const l = parseNum(fld(ff,'litres').value), p = parseNum(fld(ff,'price').value); $('#totalInput').placeholder = (l > 0 && p > 0) ? `auto ${(l*p).toFixed(2).replace('.', ',')}` : 'auto'; }
+fld(ff,'litres').addEventListener('input', updateTotalHint); fld(ff,'price').addEventListener('input', updateTotalHint);
+
+function saveReading(){
+  const date = fld(rf,'date').value, cm = parseNum(fld(rf,'cm').value), note = fld(rf,'note').value.trim();
+  if (!DATE_RE.test(date)) return msg('#readingMsg', 'Choose a date for the reading.');
+  if (date > todayStr()) return msg('#readingMsg', `The date ${fmtD(dn(date))} is in the future. Enter the date the gauge was read.`);
+  if (cm == null || !isFinite(cm) || cm < 0 || cm > 500) return msg('#readingMsg', 'Enter the gauge level in cm, for example 37,5.');
+  const wasEdit = !!editR;
+  if (editR) Object.assign(state.readings.find(x => x.id === editR), {date, cm, note});
+  else state.readings.push({id: uid(), date, cm, note});
+  const stored = save(); markChanged(); resetReading(); render();
+  msg('#readingMsg', `${wasEdit ? 'Reading updated' : 'Reading added'}: ${fmtD(dn(date))}, ${showNum(cm)} cm.${stored ? '' : ' Not saved in this browser view, export before closing.'}${unexportedHint()}`, true);
+}
+function saveRefill(){
+  const date = fld(ff,'date').value, note = fld(ff,'note').value.trim();
+  const litres = parseNum(fld(ff,'litres').value), pricePerL = parseNum(fld(ff,'price').value), totalEur = parseNum(fld(ff,'total').value), afterCm = parseNum(fld(ff,'afterCm').value);
+  if (!DATE_RE.test(date)) return msg('#refillMsg', 'Choose a date for the refill.');
+  if (date > todayStr()) return msg('#refillMsg', `The date ${fmtD(dn(date))} is in the future. Record a refill once it has been delivered.`);
+  if (litres == null || !isFinite(litres) || litres <= 0) return msg('#refillMsg', 'Enter the litres delivered, for example 1000.');
+  if (pricePerL == null || !isFinite(pricePerL) || pricePerL <= 0) return msg('#refillMsg', 'Enter the price per litre, for example 1,09.');
+  if (totalEur != null && (!isFinite(totalEur) || totalEur < 0)) return msg('#refillMsg', 'Total € must be a number, or leave it empty.');
+  if (afterCm != null && (!isFinite(afterCm) || afterCm < 0 || afterCm > 500)) return msg('#refillMsg', 'Gauge after fill must be in cm, or leave it empty.');
+  const rec = {date, litres, pricePerL, totalEur, note};
+  const wasEdit = !!editF;
+  if (editF) Object.assign(state.refills.find(x => x.id === editF), rec);
+  else {
+    state.refills.push({id: uid(), ...rec});
+    if (afterCm != null) state.readings.push({id: uid(), date, cm: afterCm, note: ''});
+  }
+  const stored = save(); markChanged(); resetRefill(); render();
+  const tot = totalEur != null ? totalEur : litres * pricePerL;
+  msg('#refillMsg', `${wasEdit ? 'Refill updated' : 'Refill added'}: ${fmtD(dn(date))}, ${showNum(litres)} L at €${showNum(pricePerL)}/L, total ${fE(tot)}${afterCm != null && !wasEdit ? `, reading ${showNum(afterCm)} cm` : ''}.${stored ? '' : ' Not saved in this browser view, export before closing.'}${unexportedHint()}`, true);
+}
+$('#readingSubmit').onclick = saveReading;
+$('#refillSubmit').onclick = saveRefill;
+rf.addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); saveReading(); } });
+ff.addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); saveRefill(); } });
+$('#readingCancel').onclick = () => { resetReading(); msg('#readingMsg', '', true); };
+$('#refillCancel').onclick = () => { resetRefill(); msg('#refillMsg', '', true); };
+
+document.addEventListener('click', async e => {
+  const t = e.target.closest('button'); if (!t) return;
+  if (t.dataset.delR){ const x = state.readings.find(v => v.id === t.dataset.delR);
+    if (x && await ask(`Delete the reading of ${fmtD(dn(x.date))} (${showNum(x.cm)} cm)?`, 'Delete reading')){ state.readings = state.readings.filter(v => v !== x); save(); markChanged(); render(); msg('#readingMsg', `Reading of ${fmtD(dn(x.date))} deleted.${unexportedHint()}`, true); } }
+  if (t.dataset.delF){ const x = state.refills.find(v => v.id === t.dataset.delF);
+    if (x && await ask(`Delete the refill of ${fmtD(dn(x.date))}?`, 'Delete refill')){ state.refills = state.refills.filter(v => v !== x); save(); markChanged(); render(); msg('#refillMsg', `Refill of ${fmtD(dn(x.date))} deleted.${unexportedHint()}`, true); } }
+  if (t.dataset.editR){ const x = state.readings.find(v => v.id === t.dataset.editR); if (!x) return;
+    editR = x.id; fld(rf,'date').value = x.date; fld(rf,'cm').value = showNum(x.cm); fld(rf,'note').value = x.note || ''; msg('#readingMsg', '', true);
+    $('#readingTitle').textContent = 'Edit reading'; $('#readingSubmit').textContent = 'Save changes'; $('#readingCancel').hidden = false;
+    $('#readingPanel').classList.add('editing'); $('#readingPanel').scrollIntoView({behavior:'smooth', block:'center'}); fld(rf,'cm').focus({preventScroll:true}); }
+  if (t.dataset.editF){ const x = state.refills.find(v => v.id === t.dataset.editF); if (!x) return;
+    editF = x.id; fld(ff,'date').value = x.date; fld(ff,'litres').value = showNum(x.litres); fld(ff,'price').value = showNum(x.pricePerL); fld(ff,'total').value = showNum(x.totalEur); fld(ff,'note').value = x.note || ''; fld(ff,'afterCm').value = ''; msg('#refillMsg', '', true);
+    $('#afterCmLabel').hidden = true;
+    $('#refillTitle').textContent = 'Edit refill'; $('#refillSubmit').textContent = 'Save changes'; $('#refillCancel').hidden = false; updateTotalHint();
+    $('#refillPanel').classList.add('editing'); $('#refillPanel').scrollIntoView({behavior:'smooth', block:'center'}); fld(ff,'litres').focus({preventScroll:true}); }
+});
+
+/* ---------- export / import ---------- */
+function downloadJson(obj, filename){
+  const blob = new Blob([JSON.stringify(obj, null, 2)], {type: 'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+$('#btnExport').onclick = () => {
+  const out = {...state, exportedAt: new Date().toISOString(), app: 'heating-oil-tracker'};
+  markBackedUp(out.exportedAt);
+  downloadJson(out, `heating-oil-${todayStr()}.json`);
+};
+
+/* ---------- data format files: JSON Schema (draft-07) and a small valid example ---------- */
+function buildSchema(){
+  const D = DEFAULT_SETTINGS;
+  const num = (desc, extra) => ({type: 'number', description: desc, ...extra});
+  const optNum = (desc, extra) => ({type: ['number', 'null'], description: desc, ...extra});
+  return {
+    $schema: 'http://json-schema.org/draft-07/schema#',
+    $id: 'heating-oil-tracker/schema/v' + SCHEMA_VERSION,
+    title: `Heating oil tracker data, version ${SCHEMA_VERSION}`,
+    description: 'Format of the file written by "Export data" and read by "Import data". Only stored data is included; levels, rates, seasons, temperatures and forecasts are recalculated on load. Unknown fields are ignored on import.',
+    $comment: 'The app also checks rules JSON Schema cannot express: dates must exist on the calendar (2026-02-31 is rejected); ids must be unique across readings and refills; fullGaugeCm must be above gaugeOffsetCm; reorderGaugeCm must be at least gaugeOffsetCm and below fullGaugeCm; hddThreshold must not be above hddBase.',
+    type: 'object',
+    required: ['readings', 'refills'],
+    properties: {
+      version: {const: SCHEMA_VERSION, description: 'Format version. Optional on import; any other value is rejected.'},
+      app: {type: 'string', description: 'Written on export; ignored on import.'},
+      exportedAt: {type: 'string', format: 'date-time', description: 'Export time (ISO 8601). Used by the backup reminder after import.'},
+      settings: {
+        type: 'object',
+        description: 'Optional. Each missing field takes its default.',
+        properties: {
+          cmToL: num('Litres per cm of gauge.', {exclusiveMinimum: 0, default: D.cmToL}),
+          gaugeOffsetCm: num('How many cm the outside gauge reads above the real level.', {minimum: 0, default: D.gaugeOffsetCm}),
+          fullGaugeCm: num('Gauge reading when the tank is full. Must be above gaugeOffsetCm.', {default: D.fullGaugeCm}),
+          reorderGaugeCm: num('Gauge reading that triggers the reorder forecast. Between gaugeOffsetCm (inclusive) and fullGaugeCm.', {default: D.reorderGaugeCm}),
+          hddBase: num('Degree-day base: outdoor daily mean temperature in °C.', {minimum: 10, maximum: 25, default: D.hddBase}),
+          hddThreshold: num('Heating threshold: outdoor daily mean in °C at or below which a day counts degree days. Not above hddBase.', {minimum: 5, maximum: 25, default: D.hddThreshold}),
+          forecastMethod: {enum: FORECAST_METHODS, default: D.forecastMethod, description: '"auto": temperature model when it explains at least 50% of usage, otherwise monthly averages. "profile": monthly averages only.'},
+          location: {
+            description: 'Place used to download temperatures, or null.',
+            default: null,
+            anyOf: [
+              {type: 'null'},
+              {type: 'object', required: ['name', 'latitude', 'longitude'],
+               properties: {name: {type: 'string', minLength: 1, maxLength: 200}, latitude: {type: 'number', minimum: -90, maximum: 90}, longitude: {type: 'number', minimum: -180, maximum: 180}}}
+            ],
+            examples: [null, {name: 'Town, Region, Country', latitude: 40.64, longitude: 22.93}]
+          }
+        }
+      },
+      readings: {type: 'array', items: {$ref: '#/definitions/reading'}},
+      refills: {type: 'array', items: {$ref: '#/definitions/refill'}}
+    },
+    definitions: {
+      id: {type: 'string', minLength: 1, pattern: '\\S', description: 'Any unique text. Optional: a new id is generated when missing. Used only to edit or delete a record.'},
+      date: {type: 'string', pattern: '^(199\\d|20\\d\\d|2100)-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$', description: 'Calendar date YYYY-MM-DD between 1990 and 2100, without time or time zone.'},
+      note: {type: ['string', 'null'], maxLength: 500, description: 'Optional free text.'},
+      reading: {
+        type: 'object', required: ['date', 'cm'],
+        properties: {
+          id: {$ref: '#/definitions/id'}, date: {$ref: '#/definitions/date'},
+          cm: num('Outside gauge reading in cm, as read (before the offset).', {minimum: 0, maximum: 500}),
+          note: {$ref: '#/definitions/note'}
+        }
+      },
+      refill: {
+        type: 'object', required: ['date'],
+        description: 'At least one of litres or pricePerL must be a number.',
+        properties: {
+          id: {$ref: '#/definitions/id'}, date: {$ref: '#/definitions/date'},
+          litres: optNum('Litres delivered. null = unknown (then the refill counts for the price trend only).', {exclusiveMinimum: 0}),
+          pricePerL: optNum('Price in € per litre.', {exclusiveMinimum: 0}),
+          totalEur: optNum('Invoice total in €. null = calculated as litres × pricePerL.', {minimum: 0}),
+          note: {$ref: '#/definitions/note'}
+        },
+        anyOf: [
+          {required: ['litres'], properties: {litres: {type: 'number'}}},
+          {required: ['pricePerL'], properties: {pricePerL: {type: 'number'}}}
+        ]
+      }
+    }
+  };
+}
+function buildExample(){
+  return {
+    version: SCHEMA_VERSION, app: 'heating-oil-tracker', exportedAt: new Date().toISOString(),
+    settings: {...DEFAULT_SETTINGS},
+    readings: [
+      {id: 'r1', date: '2025-10-16', cm: 35.5, note: 'Reading before the refill'},
+      {id: 'r2', date: '2025-10-18', cm: 131, note: 'Reading after the refill'},
+      {id: 'r3', date: '2025-12-06', cm: 100, note: ''},
+      {id: 'r4', date: '2025-12-31', cm: 55.5, note: ''},
+      {id: 'r5', date: '2026-01-07', cm: 42, note: ''},
+      {id: 'r6', date: '2026-01-13', cm: 26, note: ''},
+      {id: 'r7', date: '2026-01-14', cm: 112, note: ''}
+    ],
+    refills: [
+      {id: 'f1', date: '2025-10-18', litres: 1000, pricePerL: 1.09, totalEur: null, note: 'Total calculated as litres × price'},
+      {id: 'f2', date: '2026-01-13', litres: 800, pricePerL: 1.09, totalEur: 879, note: 'Total taken from the invoice'}
+    ]
+  };
+}
+$('#btnImport').onclick = () => $('#importFile').click();
+$('#dlSchema').onclick = () => downloadJson(buildSchema(), `heating-oil-schema-v${SCHEMA_VERSION}.json`);
+$('#dlExample').onclick = () => downloadJson(buildExample(), 'heating-oil-example.json');
+$('#importFile').onchange = e => {
+  const file = e.target.files[0]; if (!file) return;
+  const rd = new FileReader();
+  rd.onload = async () => {
+    let v, parsed; try { parsed = JSON.parse(rd.result); v = validate(parsed); } catch(err){ v = {ok:false, errors:['The file is not valid JSON: ' + err.message]}; }
+    if (!v.ok){ await ask(`Import stopped. Nothing was changed. Fix these in "${file.name}" and import again:\n\n• ` + v.errors.join('\n• '), 'OK', true); return; }
+    if (await ask(`Replace the current data with ${v.state.readings.length} readings and ${v.state.refills.length} refills from "${file.name}"?`, 'Replace data')){
+      state = v.state; save();
+      const ts = (typeof parsed.exportedAt === 'string' && !isNaN(Date.parse(parsed.exportedAt))) ? new Date(parsed.exportedAt).toISOString() : new Date().toISOString();
+      markBackedUp(ts); resetReading(); resetRefill(); render();
+    }
+  };
+  rd.readAsText(file); e.target.value = '';
+};
+
+/* ---------- settings ---------- */
+const dlg = $('#settingsDlg');
+let pendingLoc = null;
+const SETTING_LABELS = {cmToL: 'Litres per cm', gaugeOffsetCm: 'Gauge offset', fullGaugeCm: 'Full tank', reorderGaugeCm: 'Reorder level',
+  hddBase: 'Degree-day base', hddThreshold: 'Heating threshold', forecastMethod: 'Forecast method', location: 'Location'};
+const friendlySetting = t => t.replace(/^settings\.(\w+)( \([^)]*\))?/, (m, k) => SETTING_LABELS[k] || k);
+const setVals = () => ({...state.settings,
+  cmToL: parseNum($('#setF').value), gaugeOffsetCm: parseNum($('#setOff').value), fullGaugeCm: parseNum($('#setFull').value), reorderGaugeCm: parseNum($('#setReorder').value),
+  hddBase: parseNum($('#setHddBase').value), hddThreshold: parseNum($('#setHddThr').value), forecastMethod: $('#setMethod').value, location: pendingLoc});
+function setInfo(){ const n = setVals();
+  $('#setInfo').textContent = (n.cmToL > 0 && n.fullGaugeCm > n.gaugeOffsetCm) ? `Full tank holds about ${fL((n.fullGaugeCm-n.gaugeOffsetCm)*n.cmToL)} L real. Reorder level is about ${fL(Math.max(0,(n.reorderGaugeCm-n.gaugeOffsetCm)*n.cmToL))} L real.` : ''; }
+function showLoc(){
+  $('#locCurrent').innerHTML = pendingLoc
+    ? `Current: <b>${esc(pendingLoc.name)}</b> (${pendingLoc.latitude.toFixed(3)}, ${pendingLoc.longitude.toFixed(3)}) <button class="btn small" type="button" id="locRemove">Remove</button>`
+    : 'No location set. Search for your town to add temperatures.';
+  const rm = $('#locRemove'); if (rm) rm.onclick = () => { pendingLoc = null; showLoc(); };
+}
+$('#btnSettings').onclick = () => { const S = state.settings;
+  $('#setF').value = showNum(S.cmToL); $('#setOff').value = showNum(S.gaugeOffsetCm); $('#setFull').value = showNum(S.fullGaugeCm); $('#setReorder').value = showNum(S.reorderGaugeCm);
+  $('#setHddBase').value = showNum(S.hddBase); $('#setHddThr').value = showNum(S.hddThreshold); $('#setMethod').value = S.forecastMethod;
+  pendingLoc = S.location ? {...S.location} : null; $('#locResults').innerHTML = ''; $('#locQuery').value = '';
+  $('#setMsg').textContent = ''; $('#fitResult').hidden = true; setInfo(); showLoc(); dlg.showModal(); };
+['#setF','#setOff','#setFull','#setReorder'].forEach(s => $(s).addEventListener('input', setInfo));
+async function findPlaces(){
+  const q = $('#locQuery').value.trim(); const box = $('#locResults');
+  if (q.length < 2){ box.innerHTML = '<p class="status err">Type at least 2 letters.</p>'; return; }
+  box.innerHTML = '<p class="note">Searching…</p>';
+  try {
+    const list = await searchPlaces(q);
+    if (!list.length){ box.innerHTML = '<p class="status err">No places found. Try the name in English or Greek, or a nearby larger town.</p>'; return; }
+    box.innerHTML = list.map((p,i) => `<button class="btn" type="button" data-loc="${i}">${esc(p.name)}</button>`).join('');
+    box.querySelectorAll('[data-loc]').forEach(btn => btn.onclick = () => { pendingLoc = list[Number(btn.dataset.loc)]; box.innerHTML = ''; showLoc(); });
+  } catch(e){ box.innerHTML = `<p class="status err">${esc(netError(e))}</p>`; }
+}
+$('#locFind').onclick = findPlaces;
+$('#fitBtn').onclick = () => {
+  const box = $('#fitResult'); box.hidden = false;
+  const r = lastComputed;
+  if (!r || !r.temps){ box.innerHTML = '<p class="status err">Temperatures are needed first: set your location and save, then wait for them to download.</p>'; return; }
+  if (r.fitGaps.length < 5){ box.innerHTML = `<p class="status err">Only ${r.fitGaps.length} gaps between readings have temperatures; at least 5 are needed.</p>`; return; }
+  const f = fitDegreeDays(r.fitGaps);
+  if (!f.best){ box.innerHTML = '<p class="status err">No combination gave a usable fit.</p>'; return; }
+  const b = f.best, S = state.settings, cur = r.model;
+  const pc = v => Math.round(Math.max(0, v) * 100) + '%';
+  box.innerHTML = `<p><b>Best fit: base ${showNum(b.base)} °C, threshold ${showNum(b.thr)} °C.</b> It explains ${pc(b.r2)} of your usage` +
+    (cur ? `, compared with ${pc(cur.r2)} for the current ${showNum(S.hddBase)} °C / ${showNum(S.hddThreshold)} °C.` : '.') + `</p>` +
+    `<p>With these values your use is about ${b.fitBase.toFixed(1)} L/day baseline plus ${b.perHdd.toFixed(2)} L per degree day. Based on ${b.n} gaps between readings, ${f.tried} combinations tried.</p>` +
+    (f.ambiguous ? `<p class="status err">Several combinations fit almost equally well (their unexplained variation is within 10% of the best): base ${showNum(f.baseRange[0])} to ${showNum(f.baseRange[1])} °C, threshold ${showNum(f.thrRange[0])} to ${showNum(f.thrRange[1])} °C. Treat the exact values with caution; more readings will narrow this down.</p>` : '') +
+    (cur && b.r2 - cur.r2 < 0.02 ? `<p>The improvement is small, so the current values are almost as good.</p>` : '') +
+    `<div class="form-actions"><button class="btn primary" type="button" id="fitUse">Use these values</button></div>`;
+  $('#fitUse').onclick = () => { $('#setHddBase').value = showNum(b.base); $('#setHddThr').value = showNum(b.thr);
+    box.innerHTML = `<p>Values filled in: base ${showNum(b.base)} °C, threshold ${showNum(b.thr)} °C. Click "Save settings" to apply them.</p>`; };
+};
+$('#locQuery').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); findPlaces(); } });
+$('#setClose').onclick = () => dlg.close();
+$('#setSave').onclick = () => {
+  const n = setVals();
+  const bad = settingsErrors(n);
+  if (bad.length){ $('#setMsg').textContent = 'Check the values: ' + bad.map(friendlySetting).join(' '); return; }
+  const changed = JSON.stringify(n) !== JSON.stringify(state.settings);
+  const locChanged = JSON.stringify(n.location) !== JSON.stringify(state.settings.location);
+  state.settings = n; save(); if (changed) markChanged(); dlg.close(); render();
+  if (locChanged) refreshWeather(true);
+};
+$('#setReset').onclick = async () => { if (await ask('Replace all current data with the original spreadsheet data? Export first if you want to keep your changes.', 'Restore spreadsheet data')){ state = seedState(); save(); markChanged(); dlg.close(); resetReading(); resetRefill(); render(); } };
+
+/* ---------- start ---------- */
+state = load();
+loadMeta();
+loadWx();
+renderBackup();
+if (!canStore) $('#storageBanner').hidden = false;
+if (loadProblem){
+  $('#loadBanner').hidden = false;
+  $('#loadText').textContent = `The data saved in this browser couldn't be read (${loadProblem.errors[0]}), so the spreadsheet data is shown instead. Your saved data was kept as a backup; download it, fix it and import it.`;
+  $('#loadDownload').onclick = () => { const blob = new Blob([loadProblem.raw], {type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `heating-oil-unreadable-${todayStr()}.json`; document.body.appendChild(a); a.click(); a.remove(); };
+}
+resetReading(); resetRefill();
+render();
+refreshWeather(false);
+</script>
+</body>
+</html>
